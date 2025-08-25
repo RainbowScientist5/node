@@ -29,7 +29,7 @@ const assert = require('node:assert');
   );
 }
 
-// Guarantee dot-left numbers are ignored
+// Guarantee dot-right numbers are ignored
 {
   const callSites = getCallSites(3.6);
   assert.strictEqual(callSites.length, 3);
@@ -44,6 +44,11 @@ const assert = require('node:assert');
   assert.throws(() => {
     // Max than kDefaultMaxCallStackSizeToCapture
     getCallSites(201);
+  }, common.expectsError({
+    code: 'ERR_OUT_OF_RANGE'
+  }));
+  assert.throws(() => {
+    getCallSites(0.5);
   }, common.expectsError({
     code: 'ERR_OUT_OF_RANGE'
   }));
@@ -77,6 +82,13 @@ const assert = require('node:assert');
     /test-util-getcallsites/,
     'node:util should be ignored',
   );
+}
+
+// ScriptId is a string.
+{
+  const callSites = getCallSites(1);
+  assert.strictEqual(callSites.length, 1);
+  assert.strictEqual(typeof callSites[0].scriptId, 'string');
 }
 
 // Guarantee [eval] will appear on stacktraces when using -e
@@ -119,14 +131,15 @@ const assert = require('node:assert');
   const { status, stderr, stdout } = spawnSync(process.execPath, [
     '--no-warnings',
     '--experimental-transform-types',
-    fixtures.path('typescript/ts/test-get-callsite.ts'),
+    fixtures.path('typescript/ts/test-get-callsites.ts'),
   ]);
 
   const output = stdout.toString();
   assert.strictEqual(stderr.toString(), '');
   assert.match(output, /lineNumber: 8/);
   assert.match(output, /column: 18/);
-  assert.match(output, /test-get-callsite\.ts/);
+  assert.match(output, /columnNumber: 18/);
+  assert.match(output, /test-get-callsites\.ts/);
   assert.strictEqual(status, 0);
 }
 
@@ -135,7 +148,7 @@ const assert = require('node:assert');
     '--no-warnings',
     '--experimental-transform-types',
     '--no-enable-source-maps',
-    fixtures.path('typescript/ts/test-get-callsite.ts'),
+    fixtures.path('typescript/ts/test-get-callsites.ts'),
   ]);
 
   const output = stdout.toString();
@@ -143,7 +156,8 @@ const assert = require('node:assert');
   // Line should be wrong when sourcemaps are disable
   assert.match(output, /lineNumber: 2/);
   assert.match(output, /column: 18/);
-  assert.match(output, /test-get-callsite\.ts/);
+  assert.match(output, /columnNumber: 18/);
+  assert.match(output, /test-get-callsites\.ts/);
   assert.strictEqual(status, 0);
 }
 
@@ -152,13 +166,28 @@ const assert = require('node:assert');
   const { status, stderr, stdout } = spawnSync(process.execPath, [
     '--no-warnings',
     '--experimental-transform-types',
-    fixtures.path('typescript/ts/test-get-callsite-explicit.ts'),
+    fixtures.path('typescript/ts/test-get-callsites-explicit.ts'),
   ]);
 
   const output = stdout.toString();
   assert.strictEqual(stderr.toString(), '');
   assert.match(output, /lineNumber: 2/);
   assert.match(output, /column: 18/);
-  assert.match(output, /test-get-callsite-explicit\.ts/);
+  assert.match(output, /columnNumber: 18/);
+  assert.match(output, /test-get-callsites-explicit\.ts/);
   assert.strictEqual(status, 0);
+}
+
+{
+  // sourceMap must be a boolean
+  assert.throws(() => getCallSites({ sourceMap: 1 }), {
+    code: 'ERR_INVALID_ARG_TYPE'
+  });
+  assert.throws(() => getCallSites(1, { sourceMap: 1 }), {
+    code: 'ERR_INVALID_ARG_TYPE'
+  });
+
+  // Not specifying the sourceMap option should not fail.
+  getCallSites({});
+  getCallSites(1, {});
 }

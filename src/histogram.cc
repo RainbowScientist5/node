@@ -117,22 +117,14 @@ void HistogramImpl::RegisterExternalReferences(
   registry->Register(GetPercentiles);
   registry->Register(GetPercentilesBigInt);
   registry->Register(DoReset);
-  registry->Register(fast_reset_.GetTypeInfo());
-  registry->Register(fast_get_count_.GetTypeInfo());
-  registry->Register(fast_get_min_.GetTypeInfo());
-  registry->Register(fast_get_max_.GetTypeInfo());
-  registry->Register(fast_get_mean_.GetTypeInfo());
-  registry->Register(fast_get_exceeds_.GetTypeInfo());
-  registry->Register(fast_get_stddev_.GetTypeInfo());
-  registry->Register(fast_get_percentile_.GetTypeInfo());
-  registry->Register(FastReset);
-  registry->Register(FastGetCount);
-  registry->Register(FastGetMin);
-  registry->Register(FastGetMax);
-  registry->Register(FastGetMean);
-  registry->Register(FastGetExceeds);
-  registry->Register(FastGetStddev);
-  registry->Register(FastGetPercentile);
+  registry->Register(fast_reset_);
+  registry->Register(fast_get_count_);
+  registry->Register(fast_get_min_);
+  registry->Register(fast_get_max_);
+  registry->Register(fast_get_mean_);
+  registry->Register(fast_get_exceeds_);
+  registry->Register(fast_get_stddev_);
+  registry->Register(fast_get_percentile_);
   is_registered = true;
 }
 
@@ -226,7 +218,7 @@ BaseObjectPtr<HistogramBase> HistogramBase::Create(
            ->InstanceTemplate()
            ->NewInstance(env->context())
            .ToLocal(&obj)) {
-    return BaseObjectPtr<HistogramBase>();
+    return nullptr;
   }
 
   return MakeBaseObject<HistogramBase>(env, obj, options);
@@ -240,7 +232,7 @@ BaseObjectPtr<HistogramBase> HistogramBase::Create(
            ->InstanceTemplate()
            ->NewInstance(env->context())
            .ToLocal(&obj)) {
-    return BaseObjectPtr<HistogramBase>();
+    return nullptr;
   }
   return MakeBaseObject<HistogramBase>(env, obj, std::move(histogram));
 }
@@ -302,10 +294,8 @@ void HistogramBase::RegisterExternalReferences(
   registry->Register(Add);
   registry->Register(Record);
   registry->Register(RecordDelta);
-  registry->Register(fast_record_.GetTypeInfo());
-  registry->Register(fast_record_delta_.GetTypeInfo());
-  registry->Register(FastRecord);
-  registry->Register(FastRecordDelta);
+  registry->Register(fast_record_);
+  registry->Register(fast_record_delta_);
   HistogramImpl::RegisterExternalReferences(registry);
 }
 
@@ -341,7 +331,7 @@ Local<FunctionTemplate> IntervalHistogram::GetConstructorTemplate(
     Isolate* isolate = env->isolate();
     tmpl = NewFunctionTemplate(isolate, nullptr);
     tmpl->Inherit(HandleWrap::GetConstructorTemplate(env));
-    tmpl->SetClassName(OneByteString(isolate, "Histogram"));
+    tmpl->SetClassName(FIXED_ONE_BYTE_STRING(isolate, "Histogram"));
     auto instance = tmpl->InstanceTemplate();
     instance->SetInternalFieldCount(HistogramImpl::kInternalFieldCount);
     HistogramImpl::AddMethods(isolate, tmpl);
@@ -356,10 +346,8 @@ void IntervalHistogram::RegisterExternalReferences(
     ExternalReferenceRegistry* registry) {
   registry->Register(Start);
   registry->Register(Stop);
-  registry->Register(fast_start_.GetTypeInfo());
-  registry->Register(fast_stop_.GetTypeInfo());
-  registry->Register(FastStart);
-  registry->Register(FastStop);
+  registry->Register(fast_start_);
+  registry->Register(fast_stop_);
   HistogramImpl::RegisterExternalReferences(registry);
 }
 
@@ -394,7 +382,7 @@ BaseObjectPtr<IntervalHistogram> IntervalHistogram::Create(
   if (!GetConstructorTemplate(env)
           ->InstanceTemplate()
           ->NewInstance(env->context()).ToLocal(&obj)) {
-    return BaseObjectPtr<IntervalHistogram>();
+    return nullptr;
   }
 
   return MakeBaseObject<IntervalHistogram>(

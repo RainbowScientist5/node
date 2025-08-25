@@ -212,7 +212,15 @@ enum class DatagramStatus : uint8_t {
   LOST,
 };
 
-constexpr uint64_t NGTCP2_APP_NOERROR = 65280;
+#define CC_ALGOS(V)                                                            \
+  V(RENO, reno)                                                                \
+  V(CUBIC, cubic)                                                              \
+  V(BBR, bbr)
+
+#define V(name, _) static constexpr auto CC_ALGO_##name = NGTCP2_CC_ALGO_##name;
+CC_ALGOS(V)
+#undef V
+
 constexpr size_t kDefaultMaxPacketLength = NGTCP2_MAX_UDP_PAYLOAD_SIZE;
 constexpr size_t kMaxSizeT = std::numeric_limits<size_t>::max();
 constexpr uint64_t kMaxSafeJsInteger = 9007199254740991;
@@ -221,7 +229,7 @@ constexpr size_t kMaxVectorCount = 16;
 
 using error_code = uint64_t;
 
-class DebugIndentScope {
+class DebugIndentScope final {
  public:
   inline DebugIndentScope() { ++indent_; }
   DISALLOW_COPY_AND_MOVE(DebugIndentScope)

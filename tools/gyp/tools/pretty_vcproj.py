@@ -15,9 +15,7 @@
 
 import os
 import sys
-
-from xml.dom.minidom import parse
-from xml.dom.minidom import Node
+from xml.dom.minidom import Node, parse
 
 __author__ = "nsylvain (Nicolas Sylvain)"
 ARGUMENTS = None
@@ -118,8 +116,8 @@ def FixFilenames(filenames, current_directory):
     new_list = []
     for filename in filenames:
         if filename:
-            for key in REPLACEMENTS:
-                filename = filename.replace(key, REPLACEMENTS[key])
+            for key, value in REPLACEMENTS.items():
+                filename = filename.replace(key, value)
             os.chdir(current_directory)
             filename = filename.strip("\"' ")
             if filename.startswith("$"):

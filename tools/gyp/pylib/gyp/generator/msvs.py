@@ -9,22 +9,21 @@ import posixpath
 import re
 import subprocess
 import sys
-
 from collections import OrderedDict
 
 import gyp.common
-import gyp.easy_xml as easy_xml
 import gyp.generator.ninja as ninja_generator
-import gyp.MSVSNew as MSVSNew
-import gyp.MSVSProject as MSVSProject
-import gyp.MSVSSettings as MSVSSettings
-import gyp.MSVSToolFile as MSVSToolFile
-import gyp.MSVSUserFile as MSVSUserFile
-import gyp.MSVSUtil as MSVSUtil
-import gyp.MSVSVersion as MSVSVersion
-from gyp.common import GypError
-from gyp.common import OrderedSet
-
+from gyp import (
+    MSVSNew,
+    MSVSProject,
+    MSVSSettings,
+    MSVSToolFile,
+    MSVSUserFile,
+    MSVSUtil,
+    MSVSVersion,
+    easy_xml,
+)
+from gyp.common import GypError, OrderedSet
 
 # Regular expression for validating Visual Studio GUIDs.  If the GUID
 # contains lowercase hex letters, MSVS will be fine. However,
@@ -185,7 +184,7 @@ def _IsWindowsAbsPath(path):
   it does not treat those as relative, which results in bad paths like:
   '..\\C:\\<some path>\\some_source_code_file.cc'
   """
-    return path.startswith("c:") or path.startswith("C:")
+    return path.startswith(("c:", "C:"))
 
 
 def _FixPaths(paths, separator="\\"):
@@ -1365,8 +1364,7 @@ def _GetOutputTargetExt(spec):
   Returns:
     A string with the extension, or None
   """
-    target_extension = spec.get("product_extension")
-    if target_extension:
+    if target_extension := spec.get("product_extension"):
         return "." + target_extension
     return None
 
@@ -2507,7 +2505,7 @@ def _GenerateMSBuildRuleTargetsFile(targets_path, msbuild_rules):
         rule_name = rule.rule_name
         target_outputs = "%%(%s.Outputs)" % rule_name
         target_inputs = (
-            "%%(%s.Identity);%%(%s.AdditionalDependencies);" "$(MSBuildProjectFile)"
+            "%%(%s.Identity);%%(%s.AdditionalDependencies);$(MSBuildProjectFile)"
         ) % (rule_name, rule_name)
         rule_inputs = "%%(%s.Identity)" % rule_name
         extension_condition = (
@@ -3100,9 +3098,7 @@ def _ConvertMSVSBuildAttributes(spec, config, build_file):
             msbuild_attributes[a] = _ConvertMSVSCharacterSet(msvs_attributes[a])
         elif a == "ConfigurationType":
             msbuild_attributes[a] = _ConvertMSVSConfigurationType(msvs_attributes[a])
-        elif a == "SpectreMitigation":
-            msbuild_attributes[a] = msvs_attributes[a]
-        elif a == "VCToolsVersion":
+        elif a == "SpectreMitigation" or a == "VCToolsVersion":
             msbuild_attributes[a] = msvs_attributes[a]
         else:
             print("Warning: Do not know how to convert MSVS attribute " + a)
@@ -3169,8 +3165,7 @@ def _GetMSBuildAttributes(spec, config, build_file):
         "windows_driver": "Link",
         "static_library": "Lib",
     }
-    msbuild_tool = msbuild_tool_map.get(spec["type"])
-    if msbuild_tool:
+    if msbuild_tool := msbuild_tool_map.get(spec["type"]):
         msbuild_settings = config["finalized_msbuild_settings"]
         out_file = msbuild_settings[msbuild_tool].get("OutputFile")
         if out_file:
@@ -3187,8 +3182,7 @@ def _GetMSBuildConfigurationGlobalProperties(spec, configurations, build_file):
     # there are actions.
     # TODO(jeanluc) Handle the equivalent of setting 'CYGWIN=nontsec'.
     new_paths = []
-    cygwin_dirs = spec.get("msvs_cygwin_dirs", ["."])[0]
-    if cygwin_dirs:
+    if cygwin_dirs := spec.get("msvs_cygwin_dirs", ["."])[0]:
         cyg_path = "$(MSBuildProjectDirectory)\\%s\\bin\\" % _FixPath(cygwin_dirs)
         new_paths.append(cyg_path)
         # TODO(jeanluc) Change the convention to have both a cygwin_dir and a
@@ -3373,7 +3367,6 @@ def _FinalizeMSBuildSettings(spec, configuration):
     prebuild = configuration.get("msvs_prebuild")
     postbuild = configuration.get("msvs_postbuild")
     def_file = _GetModuleDefinition(spec)
-    precompiled_header = configuration.get("msvs_precompiled_header")
 
     # Add the information to the appropriate tool
     # TODO(jeanluc) We could optimize and generate these settings only if
@@ -3411,7 +3404,7 @@ def _FinalizeMSBuildSettings(spec, configuration):
         msbuild_settings, "ClCompile", "DisableSpecificWarnings", disabled_warnings
     )
     # Turn on precompiled headers if appropriate.
-    if precompiled_header:
+    if precompiled_header := configuration.get("msvs_precompiled_header"):
         # While MSVC works with just file name eg. "v8_pch.h", ClangCL requires
         # the full path eg. "tools/msvs/pch/v8_pch.h" to find the file.
         # P.S. Only ClangCL defines msbuild_toolset, for MSVC it is None.
@@ -3491,11 +3484,10 @@ def _VerifySourcesExist(sources, root_dir):
     for source in sources:
         if isinstance(source, MSVSProject.Filter):
             missing_sources.extend(_VerifySourcesExist(source.contents, root_dir))
-        else:
-            if "$" not in source:
-                full_path = os.path.join(root_dir, source)
-                if not os.path.exists(full_path):
-                    missing_sources.append(full_path)
+        elif "$" not in source:
+            full_path = os.path.join(root_dir, source)
+            if not os.path.exists(full_path):
+                missing_sources.append(full_path)
     return missing_sources
 
 
@@ -3565,75 +3557,74 @@ def _AddSources2(
                 sources_handled_by_action,
                 list_excluded,
             )
-        else:
-            if source not in sources_handled_by_action:
-                detail = []
-                excluded_configurations = exclusions.get(source, [])
-                if len(excluded_configurations) == len(spec["configurations"]):
-                    detail.append(["ExcludedFromBuild", "true"])
-                else:
-                    for config_name, configuration in sorted(excluded_configurations):
-                        condition = _GetConfigurationCondition(
-                            config_name, configuration
-                        )
-                        detail.append(
-                            ["ExcludedFromBuild", {"Condition": condition}, "true"]
-                        )
-                # Add precompile if needed
-                for config_name, configuration in spec["configurations"].items():
-                    precompiled_source = configuration.get(
-                        "msvs_precompiled_source", ""
+        elif source not in sources_handled_by_action:
+            detail = []
+            excluded_configurations = exclusions.get(source, [])
+            if len(excluded_configurations) == len(spec["configurations"]):
+                detail.append(["ExcludedFromBuild", "true"])
+            else:
+                for config_name, configuration in sorted(excluded_configurations):
+                    condition = _GetConfigurationCondition(
+                        config_name, configuration
                     )
-                    if precompiled_source != "":
-                        precompiled_source = _FixPath(precompiled_source)
-                        if not extensions_excluded_from_precompile:
-                            # If the precompiled header is generated by a C source,
-                            # we must not try to use it for C++ sources,
-                            # and vice versa.
-                            basename, extension = os.path.splitext(precompiled_source)
-                            if extension == ".c":
-                                extensions_excluded_from_precompile = [
-                                    ".cc",
-                                    ".cpp",
-                                    ".cxx",
-                                ]
-                            else:
-                                extensions_excluded_from_precompile = [".c"]
-
-                    if precompiled_source == source:
-                        condition = _GetConfigurationCondition(
-                            config_name, configuration, spec
-                        )
-                        detail.append(
-                            ["PrecompiledHeader", {"Condition": condition}, "Create"]
-                        )
-                    else:
-                        # Turn off precompiled header usage for source files of a
-                        # different type than the file that generated the
-                        # precompiled header.
-                        for extension in extensions_excluded_from_precompile:
-                            if source.endswith(extension):
-                                detail.append(["PrecompiledHeader", ""])
-                                detail.append(["ForcedIncludeFiles", ""])
-
-                group, element = _MapFileToMsBuildSourceType(
-                    source,
-                    rule_dependencies,
-                    extension_to_rule_name,
-                    _GetUniquePlatforms(spec),
-                    spec["toolset"],
+                    detail.append(
+                        ["ExcludedFromBuild", {"Condition": condition}, "true"]
+                    )
+            # Add precompile if needed
+            for config_name, configuration in spec["configurations"].items():
+                precompiled_source = configuration.get(
+                    "msvs_precompiled_source", ""
                 )
-                if group == "compile" and not os.path.isabs(source):
-                    # Add an <ObjectFileName> value to support duplicate source
-                    # file basenames, except for absolute paths to avoid paths
-                    # with more than 260 characters.
-                    file_name = os.path.splitext(source)[0] + ".obj"
-                    if file_name.startswith("..\\"):
-                        file_name = re.sub(r"^(\.\.\\)+", "", file_name)
-                    elif file_name.startswith("$("):
-                        file_name = re.sub(r"^\$\([^)]+\)\\", "", file_name)
-                    detail.append(["ObjectFileName", "$(IntDir)\\" + file_name])
-                grouped_sources[group].append([element, {"Include": source}] + detail)
+                if precompiled_source != "":
+                    precompiled_source = _FixPath(precompiled_source)
+                    if not extensions_excluded_from_precompile:
+                        # If the precompiled header is generated by a C source,
+                        # we must not try to use it for C++ sources,
+                        # and vice versa.
+                        basename, extension = os.path.splitext(precompiled_source)
+                        if extension == ".c":
+                            extensions_excluded_from_precompile = [
+                                ".cc",
+                                ".cpp",
+                                ".cxx",
+                            ]
+                        else:
+                            extensions_excluded_from_precompile = [".c"]
+
+                if precompiled_source == source:
+                    condition = _GetConfigurationCondition(
+                        config_name, configuration, spec
+                    )
+                    detail.append(
+                        ["PrecompiledHeader", {"Condition": condition}, "Create"]
+                    )
+                else:
+                    # Turn off precompiled header usage for source files of a
+                    # different type than the file that generated the
+                    # precompiled header.
+                    for extension in extensions_excluded_from_precompile:
+                        if source.endswith(extension):
+                            detail.append(["PrecompiledHeader", ""])
+                            detail.append(["ForcedIncludeFiles", ""])
+
+            group, element = _MapFileToMsBuildSourceType(
+                source,
+                rule_dependencies,
+                extension_to_rule_name,
+                _GetUniquePlatforms(spec),
+                spec["toolset"],
+            )
+            if group == "compile" and not os.path.isabs(source):
+                # Add an <ObjectFileName> value to support duplicate source
+                # file basenames, except for absolute paths to avoid paths
+                # with more than 260 characters.
+                file_name = os.path.splitext(source)[0] + ".obj"
+                if file_name.startswith("..\\"):
+                    file_name = re.sub(r"^(\.\.\\)+", "", file_name)
+                elif file_name.startswith("$("):
+                    file_name = re.sub(r"^\$\([^)]+\)\\", "", file_name)
+                detail.append(["ObjectFileName", "$(IntDir)\\" + file_name])
+            grouped_sources[group].append([element, {"Include": source}] + detail)
 
 
 def _GetMSBuildProjectReferences(project):

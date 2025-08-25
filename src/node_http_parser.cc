@@ -63,6 +63,7 @@ using v8::Int32;
 using v8::Integer;
 using v8::Isolate;
 using v8::Local;
+using v8::LocalVector;
 using v8::MaybeLocal;
 using v8::Number;
 using v8::Object;
@@ -562,7 +563,7 @@ class Parser : public AsyncWrap, public StreamListener {
     new Parser(binding_data, args.This());
   }
 
-
+  // TODO(@anonrig): Add V8 Fast API
   static void Close(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
@@ -570,7 +571,7 @@ class Parser : public AsyncWrap, public StreamListener {
     delete parser;
   }
 
-
+  // TODO(@anonrig): Add V8 Fast API
   static void Free(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
@@ -581,6 +582,7 @@ class Parser : public AsyncWrap, public StreamListener {
     parser->EmitDestroy();
   }
 
+  // TODO(@anonrig): Add V8 Fast API
   static void Remove(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
@@ -693,6 +695,7 @@ class Parser : public AsyncWrap, public StreamListener {
     }
   }
 
+  // TODO(@anonrig): Add V8 Fast API
   template <bool should_pause>
   static void Pause(const FunctionCallbackInfo<Value>& args) {
     Environment* env = Environment::GetCurrent(args);
@@ -708,7 +711,7 @@ class Parser : public AsyncWrap, public StreamListener {
     }
   }
 
-
+  // TODO(@anonrig): Add V8 Fast API
   static void Consume(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
@@ -718,7 +721,7 @@ class Parser : public AsyncWrap, public StreamListener {
     stream->PushStreamListener(parser);
   }
 
-
+  // TODO(@anonrig): Add V8 Fast API
   static void Unconsume(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
@@ -735,32 +738,13 @@ class Parser : public AsyncWrap, public StreamListener {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
 
-    Local<Object> ret = Buffer::Copy(
+    Local<Object> ret;
+    if (Buffer::Copy(
         parser->env(),
         parser->current_buffer_data_,
-        parser->current_buffer_len_).ToLocalChecked();
-
-    args.GetReturnValue().Set(ret);
-  }
-
-  static void Duration(const FunctionCallbackInfo<Value>& args) {
-    Parser* parser;
-    ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
-
-    if (parser->last_message_start_ == 0) {
-      args.GetReturnValue().Set(0);
-      return;
+        parser->current_buffer_len_).ToLocal(&ret)) {
+      args.GetReturnValue().Set(ret);
     }
-
-    double duration = (uv_hrtime() - parser->last_message_start_) / 1e6;
-    args.GetReturnValue().Set(duration);
-  }
-
-  static void HeadersCompleted(const FunctionCallbackInfo<Value>& args) {
-    Parser* parser;
-    ASSIGN_OR_RETURN_UNWRAP(&parser, args.This());
-
-    args.GetReturnValue().Set(parser->headers_completed_);
   }
 
  protected:
@@ -1091,7 +1075,7 @@ void ConnectionsList::All(const FunctionCallbackInfo<Value>& args) {
 
   ASSIGN_OR_RETURN_UNWRAP(&list, args.This());
 
-  std::vector<Local<Value>> result;
+  LocalVector<Value> result(isolate);
   result.reserve(list->all_connections_.size());
   for (auto parser : list->all_connections_) {
     result.emplace_back(parser->object());
@@ -1108,7 +1092,7 @@ void ConnectionsList::Idle(const FunctionCallbackInfo<Value>& args) {
 
   ASSIGN_OR_RETURN_UNWRAP(&list, args.This());
 
-  std::vector<Local<Value>> result;
+  LocalVector<Value> result(isolate);
   result.reserve(list->all_connections_.size());
   for (auto parser : list->all_connections_) {
     if (parser->last_message_start_ == 0) {
@@ -1127,7 +1111,7 @@ void ConnectionsList::Active(const FunctionCallbackInfo<Value>& args) {
 
   ASSIGN_OR_RETURN_UNWRAP(&list, args.This());
 
-  std::vector<Local<Value>> result;
+  LocalVector<Value> result(isolate);
   result.reserve(list->active_connections_.size());
   for (auto parser : list->active_connections_) {
     result.emplace_back(parser->object());
@@ -1176,7 +1160,7 @@ void ConnectionsList::Expired(const FunctionCallbackInfo<Value>& args) {
   auto iter = list->active_connections_.begin();
   auto end = list->active_connections_.end();
 
-  std::vector<Local<Value>> result;
+  LocalVector<Value> result(isolate);
   result.reserve(list->active_connections_.size());
   while (iter != end) {
     Parser* parser = *iter;
@@ -1202,6 +1186,10 @@ void ConnectionsList::Expired(const FunctionCallbackInfo<Value>& args) {
 
 const llhttp_settings_t Parser::settings = {
     Proxy<Call, &Parser::on_message_begin>::Raw,
+
+    // on_protocol
+    nullptr,
+
     Proxy<DataCall, &Parser::on_url>::Raw,
     Proxy<DataCall, &Parser::on_status>::Raw,
 
@@ -1221,6 +1209,8 @@ const llhttp_settings_t Parser::settings = {
     Proxy<DataCall, &Parser::on_body>::Raw,
     Proxy<Call, &Parser::on_message_complete>::Raw,
 
+    // on_protocol_complete
+    nullptr,
     // on_url_complete
     nullptr,
     // on_status_complete
@@ -1309,8 +1299,6 @@ void CreatePerIsolateProperties(IsolateData* isolate_data,
   SetProtoMethod(isolate, t, "consume", Parser::Consume);
   SetProtoMethod(isolate, t, "unconsume", Parser::Unconsume);
   SetProtoMethod(isolate, t, "getCurrentBuffer", Parser::GetCurrentBuffer);
-  SetProtoMethod(isolate, t, "duration", Parser::Duration);
-  SetProtoMethod(isolate, t, "headersCompleted", Parser::HeadersCompleted);
 
   SetConstructorFunction(isolate, target, "HTTPParser", t);
 
@@ -1335,8 +1323,8 @@ void CreatePerContextProperties(Local<Object> target,
   BindingData* const binding_data = realm->AddBindingData<BindingData>(target);
   if (binding_data == nullptr) return;
 
-  std::vector<Local<Value>> methods_val;
-  std::vector<Local<Value>> all_methods_val;
+  LocalVector<Value> methods_val(isolate);
+  LocalVector<Value> all_methods_val(isolate);
 
 #define V(num, name, string)                                                   \
   methods_val.push_back(FIXED_ONE_BYTE_STRING(isolate, #string));
@@ -1380,8 +1368,6 @@ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
   registry->Register(Parser::Consume);
   registry->Register(Parser::Unconsume);
   registry->Register(Parser::GetCurrentBuffer);
-  registry->Register(Parser::Duration);
-  registry->Register(Parser::HeadersCompleted);
   registry->Register(ConnectionsList::New);
   registry->Register(ConnectionsList::All);
   registry->Register(ConnectionsList::Idle);

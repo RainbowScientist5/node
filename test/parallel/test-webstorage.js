@@ -1,11 +1,11 @@
 'use strict';
-const common = require('../common');
+const { skipIfSQLiteMissing, spawnPromisified } = require('../common');
+skipIfSQLiteMissing();
 const tmpdir = require('../common/tmpdir');
 const assert = require('node:assert');
 const { join } = require('node:path');
 const { readdir } = require('node:fs/promises');
 const { test, describe } = require('node:test');
-const { spawnPromisified } = common;
 let cnt = 0;
 
 tmpdir.refresh();
@@ -69,7 +69,7 @@ test('sessionStorage is not persisted', async () => {
 test('localStorage throws without --localstorage-file ', async () => {
   const cp = await spawnPromisified(process.execPath, [
     '--experimental-webstorage',
-    '-pe', 'localStorage === global.localStorage',
+    '-pe', 'localStorage === globalThis.localStorage',
   ]);
   assert.strictEqual(cp.code, 1);
   assert.strictEqual(cp.signal, null);
@@ -81,7 +81,7 @@ test('localStorage is not persisted if it is unused', async () => {
   const cp = await spawnPromisified(process.execPath, [
     '--experimental-webstorage',
     '--localstorage-file', nextLocalStorage(),
-    '-pe', 'localStorage === global.localStorage',
+    '-pe', 'localStorage === globalThis.localStorage',
   ]);
   assert.strictEqual(cp.code, 0);
   assert.match(cp.stdout, /true/);

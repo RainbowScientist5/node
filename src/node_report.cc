@@ -22,8 +22,9 @@
 #include <ctime>
 #include <cwctype>
 #include <fstream>
+#include <ranges>
 
-constexpr int NODE_REPORT_VERSION = 4;
+constexpr int NODE_REPORT_VERSION = 5;
 constexpr int NANOS_PER_SEC = 1000 * 1000 * 1000;
 constexpr double SEC_PER_MICROS = 1e-6;
 constexpr int MAX_FRAME_COUNT = node::kMaxFrameCountForLogging;
@@ -232,11 +233,11 @@ static void WriteNodeReport(Isolate* isolate,
     size_t expected_results = 0;
 
     env->ForEachWorker([&](Worker* w) {
-      expected_results += w->RequestInterrupt([&](Environment* env) {
+      expected_results += w->RequestInterrupt([&, w = w](Environment* env) {
         std::ostringstream os;
-
-        GetNodeReport(
-            env, "Worker thread subreport", trigger, Local<Value>(), os);
+        std::string name =
+            "Worker thread subreport [" + std::string(w->name()) + "]";
+        GetNodeReport(env, name.c_str(), trigger, Local<Value>(), os);
 
         Mutex::ScopedLock lock(workers_mutex);
         worker_infos.emplace_back(os.str());
@@ -439,10 +440,14 @@ static Maybe<std::string> ErrorToString(Isolate* isolate,
   } else if (!error->IsObject()) {
     maybe_str = error->ToString(context);
   } else if (error->IsObject()) {
-    MaybeLocal<Value> stack = error.As<Object>()->Get(
-        context, FIXED_ONE_BYTE_STRING(isolate, "stack"));
-    if (!stack.IsEmpty() && stack.ToLocalChecked()->IsString()) {
-      maybe_str = stack.ToLocalChecked().As<String>();
+    Local<Value> stack;
+    if (!error.As<Object>()
+             ->Get(context, FIXED_ONE_BYTE_STRING(isolate, "stack"))
+             .ToLocal(&stack)) {
+      return Nothing<std::string>();
+    }
+    if (stack->IsString()) {
+      maybe_str = stack.As<String>();
     }
   }
 
@@ -533,7 +538,7 @@ static void PrintJavaScriptErrorStack(JSONWriter* writer,
     line = ss.find('\n');
     while (line != -1) {
       l = ss.substr(0, line);
-      l.erase(l.begin(), std::find_if(l.begin(), l.end(), [](int ch) {
+      l.erase(l.begin(), std::ranges::find_if(l, [](int ch) {
                 return !std::iswspace(ch);
               }));
       writer->json_element(l);
@@ -676,9 +681,9 @@ static void PrintResourceUsage(JSONWriter* writer) {
     writer->json_objectend();
   }
   writer->json_objectend();
-#ifdef RUSAGE_THREAD
-  struct rusage stats;
-  if (getrusage(RUSAGE_THREAD, &stats) == 0) {
+
+  uv_rusage_t stats;
+  if (uv_getrusage_thread(&stats) == 0) {
     writer->json_objectstart("uvthreadResourceUsage");
     double user_cpu =
         stats.ru_utime.tv_sec + SEC_PER_MICROS * stats.ru_utime.tv_usec;
@@ -699,7 +704,6 @@ static void PrintResourceUsage(JSONWriter* writer) {
     writer->json_objectend();
     writer->json_objectend();
   }
-#endif  // RUSAGE_THREAD
 }
 
 static void PrintEnvironmentVariables(JSONWriter* writer) {
@@ -732,13 +736,13 @@ static void PrintSystemInformation(JSONWriter* writer) {
     int id;
   } rlimit_strings[] = {
     {"core_file_size_blocks", RLIMIT_CORE},
-    {"data_seg_size_kbytes", RLIMIT_DATA},
+    {"data_seg_size_bytes", RLIMIT_DATA},
     {"file_size_blocks", RLIMIT_FSIZE},
 #if !(defined(_AIX) || defined(__sun))
     {"max_locked_memory_bytes", RLIMIT_MEMLOCK},
 #endif
 #ifndef __sun
-    {"max_memory_size_kbytes", RLIMIT_RSS},
+    {"max_memory_size_bytes", RLIMIT_RSS},
 #endif
     {"open_files", RLIMIT_NOFILE},
     {"stack_size_bytes", RLIMIT_STACK},
@@ -747,7 +751,7 @@ static void PrintSystemInformation(JSONWriter* writer) {
     {"max_user_processes", RLIMIT_NPROC},
 #endif
 #ifndef __OpenBSD__
-    {"virtual_memory_kbytes", RLIMIT_AS}
+    {"virtual_memory_bytes", RLIMIT_AS}
 #endif
   };
 
@@ -793,25 +797,7 @@ static void PrintComponentVersions(JSONWriter* writer) {
 
   writer->json_objectstart("componentVersions");
 
-#define V(key) +1
-  std::pair<std::string_view, std::string_view>
-      versions_array[NODE_VERSIONS_KEYS(V)];
-#undef V
-  auto* slot = &versions_array[0];
-
-#define V(key)                                                                 \
-  do {                                                                         \
-    *slot++ = std::pair<std::string_view, std::string_view>(                   \
-        #key, per_process::metadata.versions.key);                             \
-  } while (0);
-  NODE_VERSIONS_KEYS(V)
-#undef V
-
-  std::sort(&versions_array[0],
-            &versions_array[arraysize(versions_array)],
-            [](auto& a, auto& b) { return a.first < b.first; });
-
-  for (const auto& version : versions_array) {
+  for (const auto& version : per_process::metadata.versions.pairs()) {
     writer->json_keyvalue(version.first, version.second);
   }
 

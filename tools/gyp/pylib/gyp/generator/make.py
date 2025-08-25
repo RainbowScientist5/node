@@ -22,16 +22,16 @@
 # the side to keep the files readable.
 
 
+import hashlib
 import os
 import re
 import subprocess
 import sys
+
 import gyp
 import gyp.common
 import gyp.xcode_emulation
 from gyp.common import GetEnvironFallback
-
-import hashlib
 
 generator_default_variables = {
     "EXECUTABLE_PREFIX": "",
@@ -78,7 +78,7 @@ def CalculateVariables(default_variables, params):
 
         # Copy additional generator configuration data from Xcode, which is shared
         # by the Mac Make generator.
-        import gyp.generator.xcode as xcode_generator
+        import gyp.generator.xcode as xcode_generator  # noqa: PLC0415
 
         global generator_additional_non_configuration_keys
         generator_additional_non_configuration_keys = getattr(
@@ -788,7 +788,7 @@ class MakefileWriter:
         self.suffix_rules_objdir2 = {}
 
         # Generate suffix rules for all compilable extensions.
-        for ext in COMPILABLE_EXTENSIONS:
+        for ext, value in COMPILABLE_EXTENSIONS.items():
             # Suffix rules for source folder.
             self.suffix_rules_srcdir.update(
                 {
@@ -797,7 +797,7 @@ class MakefileWriter:
 $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(srcdir)/%%%s FORCE_DO_CMD
 \t@$(call do_cmd,%s,1)
 """
-                        % (ext, COMPILABLE_EXTENSIONS[ext])
+                        % (ext, value)
                     )
                 }
             )
@@ -810,7 +810,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(srcdir)/%%%s FORCE_DO_CMD
 $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj).$(TOOLSET)/%%%s FORCE_DO_CMD
 \t@$(call do_cmd,%s,1)
 """
-                        % (ext, COMPILABLE_EXTENSIONS[ext])
+                        % (ext, value)
                     )
                 }
             )
@@ -821,7 +821,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj).$(TOOLSET)/%%%s FORCE_DO_CMD
 $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
 \t@$(call do_cmd,%s,1)
 """
-                        % (ext, COMPILABLE_EXTENSIONS[ext])
+                        % (ext, value)
                     )
                 }
             )
@@ -1440,7 +1440,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
         for obj in objs:
             assert " " not in obj, "Spaces in object filenames not supported (%s)" % obj
         self.WriteLn(
-            "# Add to the list of files we specially track " "dependencies for."
+            "# Add to the list of files we specially track dependencies for."
         )
         self.WriteLn("all_deps += $(OBJS)")
         self.WriteLn()
@@ -1450,7 +1450,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             self.WriteMakeRule(
                 ["$(OBJS)"],
                 deps,
-                comment="Make sure our dependencies are built " "before any of us.",
+                comment="Make sure our dependencies are built before any of us.",
                 order_only=True,
             )
 
@@ -1461,12 +1461,11 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             self.WriteMakeRule(
                 ["$(OBJS)"],
                 extra_outputs,
-                comment="Make sure our actions/rules run " "before any of us.",
+                comment="Make sure our actions/rules run before any of us.",
                 order_only=True,
             )
 
-        pchdeps = precompiled_header.GetObjDependencies(compilable, objs)
-        if pchdeps:
+        if pchdeps := precompiled_header.GetObjDependencies(compilable, objs):
             self.WriteLn("# Dependencies from obj files to their precompiled headers")
             for source, obj, gch in pchdeps:
                 self.WriteLn(f"{obj}: {gch}")
@@ -1600,8 +1599,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
 
         target_prefix = spec.get("product_prefix", target_prefix)
         target = spec.get("product_name", target)
-        product_ext = spec.get("product_extension")
-        if product_ext:
+        if product_ext := spec.get("product_extension"):
             target_ext = "." + product_ext
 
         return target_prefix + target + target_ext
@@ -1699,7 +1697,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             self.WriteMakeRule(
                 extra_outputs,
                 deps,
-                comment=("Preserve order dependency of " "special output on deps."),
+                comment=("Preserve order dependency of special output on deps."),
                 order_only=True,
             )
 
@@ -1738,7 +1736,8 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                         # into the link command, so we need lots of escaping.
                         ldflags.append(r"-Wl,-rpath=\$$ORIGIN/")
                         ldflags.append(r"-Wl,-rpath-link=\$(builddir)/")
-                library_dirs = config.get("library_dirs", [])
+                if library_dirs := config.get("library_dirs", []):
+                    library_dirs = [Sourceify(self.Absolutify(i)) for i in library_dirs]
                 ldflags += [("-L%s" % library_dir) for library_dir in library_dirs]
                 self.WriteList(ldflags, "LDFLAGS_%s" % configname)
                 if self.flavor == "mac":
@@ -1779,13 +1778,13 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             # using ":=".
             self.WriteSortedXcodeEnv(self.output, self.GetSortedXcodePostbuildEnv())
 
-            for configname in target_postbuilds:
+            for configname, value in target_postbuilds.items():
                 self.WriteLn(
                     "%s: TARGET_POSTBUILDS_%s := %s"
                     % (
                         QuoteSpaces(self.output),
                         configname,
-                        gyp.common.EncodePOSIXShellList(target_postbuilds[configname]),
+                        gyp.common.EncodePOSIXShellList(value),
                     )
                 )
 
@@ -1844,7 +1843,7 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                 "on the bundle, not the binary (target '%s')" % self.target
             )
             assert "product_dir" not in spec, (
-                "Postbuilds do not work with " "custom product_dir"
+                "Postbuilds do not work with custom product_dir"
             )
 
         if self.type == "executable":
@@ -1895,21 +1894,20 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                         part_of_all,
                         postbuilds=postbuilds,
                     )
+            elif self.flavor in ("linux", "android"):
+                self.WriteMakeRule(
+                    [self.output_binary],
+                    link_deps,
+                    actions=["$(call create_archive,$@,$^)"],
+                )
             else:
-                if self.flavor in ("linux", "android"):
-                    self.WriteMakeRule(
-                        [self.output_binary],
-                        link_deps,
-                        actions=["$(call create_archive,$@,$^)"],
-                    )
-                else:
-                    self.WriteDoCmd(
-                        [self.output_binary],
-                        link_deps,
-                        "alink",
-                        part_of_all,
-                        postbuilds=postbuilds,
-                    )
+                self.WriteDoCmd(
+                    [self.output_binary],
+                    link_deps,
+                    "alink",
+                    part_of_all,
+                    postbuilds=postbuilds,
+                )
         elif self.type == "shared_library":
             self.WriteLn(
                 "%s: LD_INPUTS := %s"
@@ -2383,7 +2381,7 @@ def WriteAutoRegenerationRule(params, root_makefile, makefile_name, build_files)
         % {
             "makefile_name": makefile_name,
             "deps": replace_sep(
-                " ".join(SourceifyAndQuoteSpaces(bf) for bf in build_files)
+                " ".join(sorted(SourceifyAndQuoteSpaces(bf) for bf in build_files))
             ),
             "cmd": replace_sep(gyp.common.EncodePOSIXShellList(
                 [gyp_binary, "-fmake"] + gyp.RegenerateFlags(options) + build_files_args

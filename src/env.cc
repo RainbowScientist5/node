@@ -39,22 +39,26 @@ namespace node {
 
 using errors::TryCatchScope;
 using v8::Array;
+using v8::ArrayBuffer;
+using v8::BackingStore;
+using v8::BackingStoreInitializationMode;
 using v8::Boolean;
 using v8::Context;
-using v8::CppHeap;
-using v8::CppHeapCreateParams;
 using v8::EmbedderGraph;
 using v8::EscapableHandleScope;
+using v8::ExternalMemoryAccounter;
 using v8::Function;
 using v8::HandleScope;
 using v8::HeapProfiler;
 using v8::HeapSpaceStatistics;
 using v8::Integer;
 using v8::Isolate;
+using v8::JustVoid;
 using v8::Local;
 using v8::Maybe;
 using v8::MaybeLocal;
 using v8::NewStringType;
+using v8::Nothing;
 using v8::Number;
 using v8::Object;
 using v8::ObjectTemplate;
@@ -87,13 +91,13 @@ void AsyncHooks::ResetPromiseHooks(Local<Function> init,
   js_promise_hooks_[3].Reset(env()->isolate(), resolve);
 }
 
-Local<Array> AsyncHooks::GetPromiseHooks(Isolate* isolate) {
-  std::vector<Local<Value>> values;
+Local<Array> AsyncHooks::GetPromiseHooks(Isolate* isolate) const {
+  v8::LocalVector<Value> values(isolate, js_promise_hooks_.size());
   for (size_t i = 0; i < js_promise_hooks_.size(); ++i) {
     if (js_promise_hooks_[i].IsEmpty()) {
-      values.push_back(Undefined(isolate));
+      values[i] = Undefined(isolate);
     } else {
-      values.push_back(js_promise_hooks_[i].Get(isolate));
+      values[i] = js_promise_hooks_[i].Get(isolate);
     }
   }
   return Array::New(isolate, values.data(), values.size());
@@ -176,11 +180,7 @@ bool AsyncHooks::pop_async_context(double async_id) {
     }
 #endif
     native_execution_async_resources_.resize(offset);
-    if (native_execution_async_resources_.size() <
-            native_execution_async_resources_.capacity() / 2 &&
-        native_execution_async_resources_.size() > 16) {
-      native_execution_async_resources_.shrink_to_fit();
-    }
+    native_execution_async_resources_.shrink_to_fit();
   }
 
   if (js_execution_async_resources()->Length() > offset) [[unlikely]] {
@@ -227,7 +227,12 @@ void AsyncHooks::InstallPromiseHooks(Local<Context> ctx) {
                            : PersistentToLocal::Strong(js_promise_hooks_[3]));
 }
 
+void Environment::PurgeTrackedEmptyContexts() {
+  std::erase_if(contexts_, [&](auto&& el) { return el.IsEmpty(); });
+}
+
 void Environment::TrackContext(Local<Context> context) {
+  PurgeTrackedEmptyContexts();
   size_t id = contexts_.size();
   contexts_.resize(id + 1);
   contexts_[id].Reset(isolate_, context);
@@ -236,13 +241,10 @@ void Environment::TrackContext(Local<Context> context) {
 
 void Environment::UntrackContext(Local<Context> context) {
   HandleScope handle_scope(isolate_);
-  contexts_.erase(std::remove_if(contexts_.begin(),
-                                 contexts_.end(),
-                                 [&](auto&& el) { return el.IsEmpty(); }),
-                  contexts_.end());
+  PurgeTrackedEmptyContexts();
   for (auto it = contexts_.begin(); it != contexts_.end(); it++) {
-    Local<Context> saved_context = PersistentToLocal::Weak(isolate_, *it);
-    if (saved_context == context) {
+    if (Local<Context> saved_context = PersistentToLocal::Weak(isolate_, *it);
+        saved_context == context) {
       it->Reset();
       contexts_.erase(it);
       break;
@@ -351,9 +353,11 @@ IsolateDataSerializeInfo IsolateData::Serialize(SnapshotCreator* creator) {
 #undef VS
 #undef VP
 
-  for (size_t i = 0; i < AsyncWrap::PROVIDERS_LENGTH; i++)
+  info.primitive_values.reserve(info.primitive_values.size() +
+                                AsyncWrap::PROVIDERS_LENGTH);
+  for (size_t i = 0; i < AsyncWrap::PROVIDERS_LENGTH; i++) {
     info.primitive_values.push_back(creator->AddData(async_wrap_provider(i)));
-
+  }
   uint32_t id = 0;
 #define VM(PropertyName) V(PropertyName##_binding_template, ObjectTemplate)
 #define V(PropertyName, TypeName)                                              \
@@ -375,7 +379,7 @@ IsolateDataSerializeInfo IsolateData::Serialize(SnapshotCreator* creator) {
 void IsolateData::DeserializeProperties(const IsolateDataSerializeInfo* info) {
   size_t i = 0;
 
-  v8::Isolate::Scope isolate_scope(isolate_);
+  Isolate::Scope isolate_scope(isolate_);
   HandleScope handle_scope(isolate_);
 
   if (per_process::enabled_debug_list.enabled(DebugCategory::MKSNAPSHOT)) {
@@ -574,19 +578,10 @@ IsolateData::IsolateData(Isolate* isolate,
       platform_(platform),
       snapshot_data_(snapshot_data),
       options_(std::move(options)) {
-  v8::CppHeap* cpp_heap = isolate->GetCppHeap();
-
   uint16_t cppgc_id = kDefaultCppGCEmbedderID;
   // We do not care about overflow since we just want this to be different
   // from the cppgc id.
   uint16_t non_cppgc_id = cppgc_id + 1;
-  if (cpp_heap == nullptr) {
-    cpp_heap_ = CppHeap::Create(platform, v8::CppHeapCreateParams{{}});
-    // TODO(joyeecheung): pass it into v8::Isolate::CreateParams and let V8
-    // own it when we can keep the isolate registered/task runner discoverable
-    // during isolate disposal.
-    isolate->AttachCppHeap(cpp_heap_.get());
-  }
 
   {
     // GC could still be run after the IsolateData is destroyed, so we store
@@ -610,13 +605,7 @@ IsolateData::IsolateData(Isolate* isolate,
   }
 }
 
-IsolateData::~IsolateData() {
-  if (cpp_heap_ != nullptr) {
-    // The CppHeap must be detached before being terminated.
-    isolate_->DetachCppHeap();
-    cpp_heap_->Terminate();
-  }
-}
+IsolateData::~IsolateData() {}
 
 // Deprecated API, embedders should use v8::Object::Wrap() directly instead.
 void SetCppgcReference(Isolate* isolate,
@@ -721,9 +710,8 @@ void Environment::TryLoadAddon(
 std::string Environment::GetCwd(const std::string& exec_path) {
   char cwd[PATH_MAX_BYTES];
   size_t size = PATH_MAX_BYTES;
-  const int err = uv_cwd(cwd, &size);
 
-  if (err == 0) {
+  if (uv_cwd(cwd, &size) == 0) {
     CHECK_GT(size, 0);
     return cwd;
   }
@@ -743,17 +731,18 @@ void Environment::add_refs(int64_t diff) {
 }
 
 uv_buf_t Environment::allocate_managed_buffer(const size_t suggested_size) {
-  NoArrayBufferZeroFillScope no_zero_fill_scope(isolate_data());
-  std::unique_ptr<v8::BackingStore> bs =
-      v8::ArrayBuffer::NewBackingStore(isolate(), suggested_size);
+  std::unique_ptr<BackingStore> bs = ArrayBuffer::NewBackingStore(
+      isolate(),
+      suggested_size,
+      BackingStoreInitializationMode::kUninitialized);
   uv_buf_t buf = uv_buf_init(static_cast<char*>(bs->Data()), bs->ByteLength());
   released_allocated_buffers_.emplace(buf.base, std::move(bs));
   return buf;
 }
 
-std::unique_ptr<v8::BackingStore> Environment::release_managed_buffer(
+std::unique_ptr<BackingStore> Environment::release_managed_buffer(
     const uv_buf_t& buf) {
-  std::unique_ptr<v8::BackingStore> bs;
+  std::unique_ptr<BackingStore> bs;
   if (buf.base != nullptr) {
     auto it = released_allocated_buffers_.find(buf.base);
     CHECK_NE(it, released_allocated_buffers_.end());
@@ -769,7 +758,7 @@ std::string Environment::GetExecPath(const std::vector<std::string>& argv) {
   std::string exec_path;
   if (uv_exepath(exec_path_buf, &exec_path_len) == 0) {
     exec_path = std::string(exec_path_buf, exec_path_len);
-  } else if (argv.size() > 0) {
+  } else if (!argv.empty()) {
     exec_path = argv[0];
   }
 
@@ -795,8 +784,10 @@ Environment::Environment(IsolateData* isolate_data,
                          const std::vector<std::string>& exec_args,
                          const EnvSerializeInfo* env_info,
                          EnvironmentFlags::Flags flags,
-                         ThreadId thread_id)
+                         ThreadId thread_id,
+                         std::string_view thread_name)
     : isolate_(isolate),
+      external_memory_accounter_(new ExternalMemoryAccounter()),
       isolate_data_(isolate_data),
       async_hooks_(isolate, MAYBE_FIELD_PTR(env_info, async_hooks)),
       immediate_info_(isolate, MAYBE_FIELD_PTR(env_info, immediate_info)),
@@ -821,16 +812,11 @@ Environment::Environment(IsolateData* isolate_data,
       flags_(flags),
       thread_id_(thread_id.id == static_cast<uint64_t>(-1)
                      ? AllocateEnvironmentThreadId().id
-                     : thread_id.id) {
-  constexpr bool is_shared_ro_heap =
-#ifdef NODE_V8_SHARED_RO_HEAP
-      true;
-#else
-      false;
-#endif
-  if (is_shared_ro_heap && !is_main_thread()) {
-    // If this is a Worker thread and we are in shared-readonly-heap mode,
-    // we can always safely use the parent's Isolate's code cache.
+                     : thread_id.id),
+      thread_name_(thread_name) {
+  if (!is_main_thread()) {
+    // If this is a Worker thread, we can always safely use the parent's
+    // Isolate's code cache because of the shared read-only heap.
     CHECK_NOT_NULL(isolate_data->worker_context());
     builtin_loader()->CopySourceAndCodeCacheReferenceFrom(
         isolate_data->worker_context()->env()->builtin_loader());
@@ -864,9 +850,6 @@ Environment::Environment(IsolateData* isolate_data,
         EnvironmentFlags::kOwnsInspector;
   }
 
-  set_env_vars(per_process::system_environment);
-  enabled_debug_list_.Parse(env_vars());
-
   // We create new copies of the per-Environment option sets, so that it is
   // easier to modify them after Environment creation. The defaults are
   // part of the per-Isolate option set, for which in turn the defaults are
@@ -875,6 +858,13 @@ Environment::Environment(IsolateData* isolate_data,
       *isolate_data->options()->per_env);
   inspector_host_port_ = std::make_shared<ExclusiveAccess<HostPort>>(
       options_->debug_options().host_port);
+
+  set_env_vars(per_process::system_environment);
+  // This should be done after options is created, so that --trace-env can be
+  // checked when parsing NODE_DEBUG_NATIVE. It should also be done after
+  // env_vars() is set so that the parser uses values from env->env_vars()
+  // which may or may not be the system environment variable store.
+  enabled_debug_list_.Parse(this);
 
   heap_snapshot_near_heap_limit_ =
       static_cast<uint32_t>(options_->heap_snapshot_near_heap_limit);
@@ -904,27 +894,22 @@ Environment::Environment(IsolateData* isolate_data,
 
   if (*TRACE_EVENT_API_GET_CATEGORY_GROUP_ENABLED(
           TRACING_CATEGORY_NODE1(environment)) != 0) {
-    auto traced_value = tracing::TracedValue::Create();
-    traced_value->BeginArray("args");
-    for (const std::string& arg : args) traced_value->AppendString(arg);
-    traced_value->EndArray();
-    traced_value->BeginArray("exec_args");
-    for (const std::string& arg : exec_args) traced_value->AppendString(arg);
-    traced_value->EndArray();
+    tracing::EnvironmentArgs traced_value(args, exec_args);
     TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(TRACING_CATEGORY_NODE1(environment),
                                       "Environment",
                                       this,
                                       "args",
-                                      std::move(traced_value));
+                                      tracing::CastTracedValue(traced_value));
   }
 
-  if (options_->experimental_permission) {
+  if (options_->permission) {
     permission()->EnablePermissions();
     // The process shouldn't be able to neither
     // spawn/worker nor use addons or enable inspector
     // unless explicitly allowed by the user
     if (!options_->allow_addons) {
       options_->allow_native_addons = false;
+      permission()->Apply(this, {"*"}, permission::PermissionScope::kAddon);
     }
     flags_ = flags_ | EnvironmentFlags::kNoCreateInspector;
     permission()->Apply(this, {"*"}, permission::PermissionScope::kInspector);
@@ -940,6 +925,25 @@ Environment::Environment(IsolateData* isolate_data,
       permission()->Apply(this, {"*"}, permission::PermissionScope::kWASI);
     }
 
+    // Implicit allow entrypoint to kFileSystemRead
+    if (!options_->has_eval_string && !options_->force_repl) {
+      std::string first_argv;
+      if (argv_.size() > 1) {
+        first_argv = argv_[1];
+      }
+
+      // Also implicit allow preloaded modules to kFileSystemRead
+      if (!options_->preload_cjs_modules.empty()) {
+        for (const std::string& mod : options_->preload_cjs_modules) {
+          options_->allow_fs_read.push_back(mod);
+        }
+      }
+
+      if (first_argv != "inspect") {
+        options_->allow_fs_read.push_back(first_argv);
+      }
+    }
+
     if (!options_->allow_fs_read.empty()) {
       permission()->Apply(this,
                           options_->allow_fs_read,
@@ -950,6 +954,10 @@ Environment::Environment(IsolateData* isolate_data,
       permission()->Apply(this,
                           options_->allow_fs_write,
                           permission::PermissionScope::kFileSystemWrite);
+    }
+
+    if (options_->allow_net) {
+      permission()->Apply(this, {"*"}, permission::PermissionScope::kNet);
     }
   }
 }
@@ -1052,6 +1060,8 @@ Environment::~Environment() {
       addon.Close();
     }
   }
+
+  delete external_memory_accounter_;
 }
 
 void Environment::InitializeLibuv() {
@@ -1104,8 +1114,7 @@ void Environment::InitializeLibuv() {
 
 void Environment::InitializeCompileCache() {
   std::string dir_from_env;
-  if (!credentials::SafeGetenv(
-          "NODE_COMPILE_CACHE", &dir_from_env, env_vars()) ||
+  if (!credentials::SafeGetenv("NODE_COMPILE_CACHE", &dir_from_env, this) ||
       dir_from_env.empty()) {
     return;
   }
@@ -1117,7 +1126,7 @@ CompileCacheEnableResult Environment::EnableCompileCache(
   CompileCacheEnableResult result;
   std::string disable_env;
   if (credentials::SafeGetenv(
-          "NODE_DISABLE_COMPILE_CACHE", &disable_env, env_vars())) {
+          "NODE_DISABLE_COMPILE_CACHE", &disable_env, this)) {
     result.status = CompileCacheEnableStatus::DISABLED;
     result.message = "Disabled by NODE_DISABLE_COMPILE_CACHE";
     Debug(this,
@@ -1236,7 +1245,8 @@ void Environment::StartProfilerIdleNotifier() {
 }
 
 void Environment::PrintSyncTrace() const {
-  if (!trace_sync_io_) return;
+  if (!trace_sync_io_) [[likely]]
+    return;
 
   HandleScope handle_scope(isolate());
 
@@ -1311,7 +1321,7 @@ void Environment::AtExit(void (*cb)(void* arg), void* arg) {
   at_exit_functions_.push_front(ExitCallback{cb, arg});
 }
 
-Maybe<bool> Environment::CheckUnsettledTopLevelAwait() {
+Maybe<bool> Environment::CheckUnsettledTopLevelAwait() const {
   HandleScope scope(isolate_);
   Local<Context> ctx = context();
   Local<Value> value;
@@ -1513,7 +1523,7 @@ void Environment::RunTimers(uv_timer_t* handle) {
   int64_t expiry_ms =
       ret.ToLocalChecked()->IntegerValue(env->context()).FromJust();
 
-  uv_handle_t* h = reinterpret_cast<uv_handle_t*>(handle);
+  auto* h = reinterpret_cast<uv_handle_t*>(handle);
 
   if (expiry_ms != 0) {
     int64_t duration_ms =
@@ -1579,58 +1589,69 @@ Local<Value> Environment::GetNow() {
   uint64_t now = GetNowUint64();
   if (now <= 0xffffffff)
     return Integer::NewFromUnsigned(isolate(), static_cast<uint32_t>(now));
-  else
-    return Number::New(isolate(), static_cast<double>(now));
+  return Number::New(isolate(), static_cast<double>(now));
 }
 
-void CollectExceptionInfo(Environment* env,
-                          Local<Object> obj,
-                          int errorno,
-                          const char* err_string,
-                          const char* syscall,
-                          const char* message,
-                          const char* path,
-                          const char* dest) {
-  obj->Set(env->context(),
-           env->errno_string(),
-           Integer::New(env->isolate(), errorno)).Check();
-
-  obj->Set(env->context(), env->code_string(),
-           OneByteString(env->isolate(), err_string)).Check();
-
-  if (message != nullptr) {
-    obj->Set(env->context(), env->message_string(),
-             OneByteString(env->isolate(), message)).Check();
+Maybe<void> CollectExceptionInfo(Environment* env,
+                                 Local<Object> obj,
+                                 int errorno,
+                                 const char* err_string,
+                                 const char* syscall,
+                                 const char* message,
+                                 const char* path,
+                                 const char* dest) {
+  if (obj->Set(env->context(),
+               env->errno_string(),
+               Integer::New(env->isolate(), errorno))
+          .IsNothing() ||
+      obj->Set(env->context(),
+               env->code_string(),
+               OneByteString(env->isolate(), err_string))
+          .IsNothing() ||
+      (message != nullptr && obj->Set(env->context(),
+                                      env->message_string(),
+                                      OneByteString(env->isolate(), message))
+                                 .IsNothing())) {
+    return Nothing<void>();
   }
 
   Local<Value> path_buffer;
   if (path != nullptr) {
-    path_buffer =
-      Buffer::Copy(env->isolate(), path, strlen(path)).ToLocalChecked();
-    obj->Set(env->context(), env->path_string(), path_buffer).Check();
+    if (!Buffer::Copy(env->isolate(), path, strlen(path))
+             .ToLocal(&path_buffer) ||
+        obj->Set(env->context(), env->path_string(), path_buffer).IsNothing()) {
+      return Nothing<void>();
+    }
   }
 
   Local<Value> dest_buffer;
   if (dest != nullptr) {
-    dest_buffer =
-      Buffer::Copy(env->isolate(), dest, strlen(dest)).ToLocalChecked();
-    obj->Set(env->context(), env->dest_string(), dest_buffer).Check();
+    if (!Buffer::Copy(env->isolate(), dest, strlen(dest))
+             .ToLocal(&dest_buffer) ||
+        obj->Set(env->context(), env->dest_string(), dest_buffer).IsNothing()) {
+      return Nothing<void>();
+    }
   }
 
   if (syscall != nullptr) {
-    obj->Set(env->context(), env->syscall_string(),
-             OneByteString(env->isolate(), syscall)).Check();
+    if (obj->Set(env->context(),
+                 env->syscall_string(),
+                 OneByteString(env->isolate(), syscall))
+            .IsNothing()) {
+      return Nothing<void>();
+    }
   }
+
+  return JustVoid();
 }
 
-void Environment::CollectUVExceptionInfo(Local<Value> object,
-                                         int errorno,
-                                         const char* syscall,
-                                         const char* message,
-                                         const char* path,
-                                         const char* dest) {
-  if (!object->IsObject() || errorno == 0)
-    return;
+Maybe<void> Environment::CollectUVExceptionInfo(Local<Value> object,
+                                                int errorno,
+                                                const char* syscall,
+                                                const char* message,
+                                                const char* path,
+                                                const char* dest) {
+  if (!object->IsObject() || errorno == 0) return JustVoid();
 
   Local<Object> obj = object.As<Object>();
   const char* err_string = uv_err_name(errorno);
@@ -1639,8 +1660,8 @@ void Environment::CollectUVExceptionInfo(Local<Value> object,
     message = uv_strerror(errorno);
   }
 
-  node::CollectExceptionInfo(this, obj, errorno, err_string,
-                             syscall, message, path, dest);
+  return CollectExceptionInfo(
+      this, obj, errorno, err_string, syscall, message, path, dest);
 }
 
 ImmediateInfo::ImmediateInfo(Isolate* isolate, const SerializeInfo* info)
@@ -1693,6 +1714,7 @@ AsyncHooks::AsyncHooks(Isolate* isolate, const SerializeInfo* info)
       fields_(isolate, kFieldsCount, MAYBE_FIELD_PTR(info, fields)),
       async_id_fields_(
           isolate, kUidFieldsCount, MAYBE_FIELD_PTR(info, async_id_fields)),
+      native_execution_async_resources_(isolate),
       info_(info) {
   HandleScope handle_scope(isolate);
   if (info == nullptr) {
@@ -1970,7 +1992,7 @@ void Environment::BuildEmbedderGraph(Isolate* isolate,
                                      EmbedderGraph* graph,
                                      void* data) {
   MemoryTracker tracker(isolate, graph);
-  Environment* env = static_cast<Environment*>(data);
+  auto* env = static_cast<Environment*>(data);
   // Start traversing embedder objects from the root Environment object.
   tracker.Track(env);
 }
@@ -2032,7 +2054,7 @@ void Environment::TracePromises(PromiseHookType type,
 size_t Environment::NearHeapLimitCallback(void* data,
                                           size_t current_heap_limit,
                                           size_t initial_heap_limit) {
-  Environment* env = static_cast<Environment*>(data);
+  auto* env = static_cast<Environment*>(data);
 
   Debug(env,
         DebugCategory::DIAGNOSTICS,
@@ -2078,8 +2100,8 @@ size_t Environment::NearHeapLimitCallback(void* data,
         DebugCategory::DIAGNOSTICS,
         "Estimated available memory=%" PRIu64 ", "
         "estimated overhead=%" PRIu64 "\n",
-        static_cast<uint64_t>(available),
-        static_cast<uint64_t>(estimated_overhead));
+        available,
+        estimated_overhead);
 
   // This might be hit when the snapshot is being taken in another
   // NearHeapLimitCallback invocation.

@@ -6,11 +6,10 @@ import errno
 import filecmp
 import os.path
 import re
-import tempfile
-import sys
-import subprocess
 import shlex
-
+import subprocess
+import sys
+import tempfile
 from collections.abc import MutableSet
 
 
@@ -35,7 +34,6 @@ class GypError(Exception):
   to the user.  The main entry point will catch and display this.
   """
 
-    pass
 
 
 def ExceptionAppend(e, msg):
@@ -423,8 +421,9 @@ def EnsureDirExists(path):
     except OSError:
         pass
 
-def GetCrossCompilerPredefines():  # -> dict
+def GetCompilerPredefines():  # -> dict
     cmd = []
+    defines = {}
 
     # shlex.split() will eat '\' in posix mode, but
     # setting posix=False will preserve extra '"' cause CreateProcess fail on Windows
@@ -441,7 +440,7 @@ def GetCrossCompilerPredefines():  # -> dict
         if CXXFLAGS := os.environ.get("CXXFLAGS"):
             cmd += shlex.split(replace_sep(CXXFLAGS))
     else:
-        return {}
+        return defines
 
     if sys.platform == "win32":
         fd, input = tempfile.mkstemp(suffix=".c")
@@ -452,17 +451,33 @@ def GetCrossCompilerPredefines():  # -> dict
                 real_cmd, shell=True,
                 capture_output=True, check=True
             ).stdout
+        except subprocess.CalledProcessError as e:
+            print(
+                "Warning: failed to get compiler predefines\n"
+                "cmd: %s\n"
+                "status: %d" % (e.cmd, e.returncode),
+                file=sys.stderr
+            )
+            return defines
         finally:
             os.unlink(input)
     else:
         input = "/dev/null"
         real_cmd = [*cmd, "-dM", "-E", "-x", "c", input]
-        stdout = subprocess.run(
-            real_cmd, shell=False,
-            capture_output=True, check=True
-        ).stdout
+        try:
+            stdout = subprocess.run(
+                real_cmd, shell=False,
+                capture_output=True, check=True
+            ).stdout
+        except subprocess.CalledProcessError as e:
+            print(
+                "Warning: failed to get compiler predefines\n"
+                "cmd: %s\n"
+                "status: %d" % (e.cmd, e.returncode),
+                file=sys.stderr
+            )
+            return defines
 
-    defines = {}
     lines = stdout.decode("utf-8").replace("\r\n", "\n").split("\n")
     for line in lines:
         if (line or "").startswith("#define "):
@@ -501,7 +516,7 @@ def GetFlavor(params):
     if "flavor" in params:
         return params["flavor"]
 
-    defines = GetCrossCompilerPredefines()
+    defines = GetCompilerPredefines()
     if "__EMSCRIPTEN__" in defines:
         return "emscripten"
     if "__wasm__" in defines:
@@ -568,7 +583,8 @@ def uniquer(seq, idfun=lambda x: x):
 
 
 # Based on http://code.activestate.com/recipes/576694/.
-class OrderedSet(MutableSet):
+class OrderedSet(MutableSet):  # noqa: PLW1641
+    # TODO (cclauss): Fix eq-without-hash ruff rule PLW1641
     def __init__(self, iterable=None):
         self.end = end = []
         end += [None, end, end]  # sentinel node for doubly linked list

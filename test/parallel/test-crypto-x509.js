@@ -18,6 +18,7 @@ const {
 
 const assert = require('assert');
 const fixtures = require('../common/fixtures');
+const { hasOpenSSL3 } = require('../common/crypto');
 const { readFileSync } = require('fs');
 
 const cert = readFileSync(fixtures.path('keys', 'agent1-cert.pem'));
@@ -50,7 +51,7 @@ emailAddress=ry@tinyclouds.org`;
 
 let infoAccessCheck = `OCSP - URI:http://ocsp.nodejs.org/
 CA Issuers - URI:http://ca.nodejs.org/ca.cert`;
-if (!common.hasOpenSSL3)
+if (!hasOpenSSL3)
   infoAccessCheck += '\n';
 
 const der = Buffer.from(
@@ -96,8 +97,6 @@ const der = Buffer.from(
   assert.strictEqual(x509.infoAccess, infoAccessCheck);
   assert.strictEqual(x509.validFrom, 'Sep  3 21:40:37 2022 GMT');
   assert.strictEqual(x509.validTo, 'Jun 17 21:40:37 2296 GMT');
-  assert.deepStrictEqual(x509.validFromDate, new Date('2022-09-03T21:40:37Z'));
-  assert.deepStrictEqual(x509.validToDate, new Date('2296-06-17T21:40:37Z'));
   assert.strictEqual(
     x509.fingerprint,
     '8B:89:16:C4:99:87:D2:13:1A:64:94:36:38:A5:32:01:F0:95:3B:53');
@@ -113,9 +112,14 @@ const der = Buffer.from(
     '5A:42:63:E0:21:2F:D6:70:63:07:96:6F:27:A7:78:12:08:02:7A:8B'
   );
   assert.strictEqual(x509.keyUsage, undefined);
-  assert.strictEqual(x509.serialNumber, '147D36C1C2F74206DE9FAB5F2226D78ADB00A426');
+  assert.strictEqual(x509.serialNumber.toUpperCase(), '147D36C1C2F74206DE9FAB5F2226D78ADB00A426');
 
   assert.deepStrictEqual(x509.raw, der);
+
+  if (!process.features.openssl_is_boringssl) {
+    assert.deepStrictEqual(x509.validFromDate, new Date('2022-09-03T21:40:37Z'));
+    assert.deepStrictEqual(x509.validToDate, new Date('2296-06-17T21:40:37Z'));
+  }
 
   assert(x509.publicKey);
   assert.strictEqual(x509.publicKey.type, 'public');
@@ -255,6 +259,16 @@ oans248kpal88CGqsN2so/wZKxVnpiXlPHMdiNL7hRSUqlHkUi07FrP2Htg8kjI=
   });
   mc.port2.postMessage(x509);
 
+  const modulusOSSL = 'D456320AFB20D3827093DC2C4284ED04DFBABD56E1DDAE529E28B790CD42' +
+                      '56DB273349F3735FFD337C7A6363ECCA5A27B7F73DC7089A96C6D886DB0C' +
+                      '62388F1CDD6A963AFCD599D5800E587A11F908960F84ED50BA25A28303EC' +
+                      'DA6E684FBE7BAEDC9CE8801327B1697AF25097CEE3F175E400984C0DB6A8' +
+                      'EB87BE03B4CF94774BA56FFFC8C63C68D6ADEB60ABBE69A7B14AB6A6B9E7' +
+                      'BAA89B5ADAB8EB07897C07F6D4FA3D660DFF574107D28E8F63467A788624' +
+                      'C574197693E959CEA1362FFAE1BBA10C8C0D88840ABFEF103631B2E8F5C3' +
+                      '9B5548A7EA57E8A39F89291813F45A76C448033A2B7ED8403F4BAA147CF3' +
+                      '5E2D2554AA65CE49695797095BF4DC6B';
+
   // Verify that legacy encoding works
   const legacyObjectCheck = {
     subject: Object.assign({ __proto__: null }, {
@@ -279,15 +293,7 @@ oans248kpal88CGqsN2so/wZKxVnpiXlPHMdiNL7hRSUqlHkUi07FrP2Htg8kjI=
       'OCSP - URI': ['http://ocsp.nodejs.org/'],
       'CA Issuers - URI': ['http://ca.nodejs.org/ca.cert']
     }),
-    modulus: 'D456320AFB20D3827093DC2C4284ED04DFBABD56E1DDAE529E28B790CD42' +
-              '56DB273349F3735FFD337C7A6363ECCA5A27B7F73DC7089A96C6D886DB0C' +
-              '62388F1CDD6A963AFCD599D5800E587A11F908960F84ED50BA25A28303EC' +
-              'DA6E684FBE7BAEDC9CE8801327B1697AF25097CEE3F175E400984C0DB6A8' +
-              'EB87BE03B4CF94774BA56FFFC8C63C68D6ADEB60ABBE69A7B14AB6A6B9E7' +
-              'BAA89B5ADAB8EB07897C07F6D4FA3D660DFF574107D28E8F63467A788624' +
-              'C574197693E959CEA1362FFAE1BBA10C8C0D88840ABFEF103631B2E8F5C3' +
-              '9B5548A7EA57E8A39F89291813F45A76C448033A2B7ED8403F4BAA147CF3' +
-              '5E2D2554AA65CE49695797095BF4DC6B',
+    modulusPattern: new RegExp(`^${modulusOSSL}$`, 'i'),
     bits: 2048,
     exponent: '0x10001',
     valid_from: 'Sep  3 21:40:37 2022 GMT',
@@ -300,7 +306,7 @@ oans248kpal88CGqsN2so/wZKxVnpiXlPHMdiNL7hRSUqlHkUi07FrP2Htg8kjI=
       '51:62:18:39:E2:E2:77:F5:86:11:E8:C0:CA:54:43:7C:76:83:19:05:D0:03:' +
       '24:21:B8:EB:14:61:FB:24:16:EB:BD:51:1A:17:91:04:30:03:EB:68:5F:DC:' +
       '86:E1:D1:7C:FB:AF:78:ED:63:5F:29:9C:32:AF:A1:8E:22:96:D1:02',
-    serialNumber: '147D36C1C2F74206DE9FAB5F2226D78ADB00A426'
+    serialNumberPattern: /^147D36C1C2F74206DE9FAB5F2226D78ADB00A426$/i
   };
 
   const legacyObject = x509.toLegacyObject();
@@ -309,7 +315,7 @@ oans248kpal88CGqsN2so/wZKxVnpiXlPHMdiNL7hRSUqlHkUi07FrP2Htg8kjI=
   assert.deepStrictEqual(legacyObject.subject, legacyObjectCheck.subject);
   assert.deepStrictEqual(legacyObject.issuer, legacyObjectCheck.issuer);
   assert.deepStrictEqual(legacyObject.infoAccess, legacyObjectCheck.infoAccess);
-  assert.strictEqual(legacyObject.modulus, legacyObjectCheck.modulus);
+  assert.match(legacyObject.modulus, legacyObjectCheck.modulusPattern);
   assert.strictEqual(legacyObject.bits, legacyObjectCheck.bits);
   assert.strictEqual(legacyObject.exponent, legacyObjectCheck.exponent);
   assert.strictEqual(legacyObject.valid_from, legacyObjectCheck.valid_from);
@@ -318,9 +324,9 @@ oans248kpal88CGqsN2so/wZKxVnpiXlPHMdiNL7hRSUqlHkUi07FrP2Htg8kjI=
   assert.strictEqual(
     legacyObject.fingerprint256,
     legacyObjectCheck.fingerprint256);
-  assert.strictEqual(
+  assert.match(
     legacyObject.serialNumber,
-    legacyObjectCheck.serialNumber);
+    legacyObjectCheck.serialNumberPattern);
 }
 
 {
@@ -353,13 +359,15 @@ tAt3hIKFD1bJt6c6WtMH2Su3syosWxmdmGk5ihslB00lvLpfj/wed8i3bkcB1doq
 UcXd/5qu2GhokrKU2cPttU+XAN2Om6a0
 -----END CERTIFICATE-----`;
 
-  const cert = new X509Certificate(certPem);
-  assert.throws(() => cert.publicKey, {
-    message: common.hasOpenSSL3 ? /decode error/ : /wrong tag/,
-    name: 'Error'
-  });
+  if (!process.features.openssl_is_boringssl) {
+    const cert = new X509Certificate(certPem);
+    assert.throws(() => cert.publicKey, {
+      message: hasOpenSSL3 ? /decode error/ : /wrong tag/,
+      name: 'Error'
+    });
 
-  assert.strictEqual(cert.checkIssued(cert), false);
+    assert.strictEqual(cert.checkIssued(cert), false);
+  }
 }
 
 {
@@ -398,8 +406,10 @@ UidvpWWipVLZgK+oDks+bKTobcoXGW9oXobiIYqslXPy
 -----END CERTIFICATE-----`.trim();
   const c1 = new X509Certificate(certPemUTCTime);
 
-  assert.deepStrictEqual(c1.validFromDate, new Date('1949-12-25T23:59:58Z'));
-  assert.deepStrictEqual(c1.validToDate, new Date('1950-01-01T23:59:58Z'));
+  if (!process.features.openssl_is_boringssl) {
+    assert.deepStrictEqual(c1.validFromDate, new Date('1949-12-25T23:59:58Z'));
+    assert.deepStrictEqual(c1.validToDate, new Date('1950-01-01T23:59:58Z'));
+  }
 
   // The GeneralizedTime format is used for dates in 2050 or later.
   const certPemGeneralizedTime = `-----BEGIN CERTIFICATE-----
@@ -433,6 +443,8 @@ CWwQO8JZjJqFtqtuzy2n+gLCvqePgG/gmSqHOPm2ZbLW
 -----END CERTIFICATE-----`.trim();
   const c2 = new X509Certificate(certPemGeneralizedTime);
 
-  assert.deepStrictEqual(c2.validFromDate, new Date('2049-12-26T00:00:01Z'));
-  assert.deepStrictEqual(c2.validToDate, new Date('2050-01-02T00:00:01Z'));
+  if (!process.features.openssl_is_boringssl) {
+    assert.deepStrictEqual(c2.validFromDate, new Date('2049-12-26T00:00:01Z'));
+    assert.deepStrictEqual(c2.validToDate, new Date('2050-01-02T00:00:01Z'));
+  }
 }

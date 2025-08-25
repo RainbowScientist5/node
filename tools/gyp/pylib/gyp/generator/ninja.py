@@ -5,25 +5,24 @@
 
 import collections
 import copy
+import ctypes
 import hashlib
 import json
 import multiprocessing
 import os.path
 import re
-import signal
 import shutil
+import signal
 import subprocess
 import sys
+from io import StringIO
+
 import gyp
 import gyp.common
 import gyp.msvs_emulation
-import gyp.MSVSUtil as MSVSUtil
 import gyp.xcode_emulation
-
-from io import StringIO
-
+from gyp import MSVSUtil, ninja_syntax
 from gyp.common import GetEnvironFallback
-import gyp.ninja_syntax as ninja_syntax
 
 generator_default_variables = {
     "EXECUTABLE_PREFIX": "",
@@ -265,8 +264,7 @@ class NinjaWriter:
         dir.
         """
 
-        PRODUCT_DIR = "$!PRODUCT_DIR"
-        if PRODUCT_DIR in path:
+        if (PRODUCT_DIR := "$!PRODUCT_DIR") in path:
             if product_dir:
                 path = path.replace(PRODUCT_DIR, product_dir)
             else:
@@ -274,8 +272,7 @@ class NinjaWriter:
                 path = path.replace(PRODUCT_DIR + "\\", "")
                 path = path.replace(PRODUCT_DIR, ".")
 
-        INTERMEDIATE_DIR = "$!INTERMEDIATE_DIR"
-        if INTERMEDIATE_DIR in path:
+        if (INTERMEDIATE_DIR := "$!INTERMEDIATE_DIR") in path:
             int_dir = self.GypPathToUniqueOutput("gen")
             # GypPathToUniqueOutput generates a path relative to the product dir,
             # so insert product_dir in front if it is provided.
@@ -1465,7 +1462,7 @@ class NinjaWriter:
             # Respect environment variables related to build, but target-specific
             # flags can still override them.
             ldflags = env_ldflags + config.get("ldflags", [])
-            if is_executable and len(solibs):
+            if is_executable and solibs:
                 rpath = "lib/"
                 if self.toolset != "target":
                     rpath += self.toolset
@@ -1555,7 +1552,7 @@ class NinjaWriter:
             if pdbname:
                 output = [output, pdbname]
 
-        if len(solibs):
+        if solibs:
             extra_bindings.append(
                 ("solibs", gyp.common.EncodePOSIXShellList(sorted(solibs)))
             )
@@ -1997,7 +1994,7 @@ def CalculateVariables(default_variables, params):
 
         # Copy additional generator configuration data from Xcode, which is shared
         # by the Mac Ninja generator.
-        import gyp.generator.xcode as xcode_generator
+        import gyp.generator.xcode as xcode_generator  # noqa: PLC0415
 
         generator_additional_non_configuration_keys = getattr(
             xcode_generator, "generator_additional_non_configuration_keys", []
@@ -2020,7 +2017,7 @@ def CalculateVariables(default_variables, params):
 
         # Copy additional generator configuration data from VS, which is shared
         # by the Windows Ninja generator.
-        import gyp.generator.msvs as msvs_generator
+        import gyp.generator.msvs as msvs_generator  # noqa: PLC0415
 
         generator_additional_non_configuration_keys = getattr(
             msvs_generator, "generator_additional_non_configuration_keys", []
@@ -2077,21 +2074,17 @@ def OpenOutput(path, mode="w"):
 
 
 def CommandWithWrapper(cmd, wrappers, prog):
-    wrapper = wrappers.get(cmd, "")
-    if wrapper:
+    if wrapper := wrappers.get(cmd, ""):
         return wrapper + " " + prog
     return prog
 
 
 def GetDefaultConcurrentLinks():
     """Returns a best-guess for a number of concurrent links."""
-    pool_size = int(os.environ.get("GYP_LINK_CONCURRENCY", 0))
-    if pool_size:
+    if pool_size := int(os.environ.get("GYP_LINK_CONCURRENCY") or 0):
         return pool_size
 
     if sys.platform in ("win32", "cygwin"):
-        import ctypes
-
         class MEMORYSTATUSEX(ctypes.Structure):
             _fields_ = [
                 ("dwLength", ctypes.c_ulong),
@@ -2112,7 +2105,7 @@ def GetDefaultConcurrentLinks():
         # VS 2015 uses 20% more working set than VS 2013 and can consume all RAM
         # on a 64 GiB machine.
         mem_limit = max(1, stat.ullTotalPhys // (5 * (2 ** 30)))  # total / 5GiB
-        hard_cap = max(1, int(os.environ.get("GYP_LINK_CONCURRENCY_MAX", 2 ** 32)))
+        hard_cap = max(1, int(os.environ.get("GYP_LINK_CONCURRENCY_MAX") or 2 ** 32))
         return min(mem_limit, hard_cap)
     elif sys.platform.startswith("linux"):
         if os.path.exists("/proc/meminfo"):
@@ -2307,8 +2300,7 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params, config_name
             key_prefix = re.sub(r"\.HOST$", ".host", key_prefix)
             wrappers[key_prefix] = os.path.join(build_to_root, value)
 
-    mac_toolchain_dir = generator_flags.get("mac_toolchain_dir", None)
-    if mac_toolchain_dir:
+    if mac_toolchain_dir := generator_flags.get("mac_toolchain_dir", None):
         wrappers["LINK"] = "export DEVELOPER_DIR='%s' &&" % mac_toolchain_dir
 
     if flavor == "win":
@@ -2535,7 +2527,7 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params, config_name
             % {"suffix": "@$link_file_list"},
             rspfile="$link_file_list",
             rspfile_content=(
-                "-Wl,--whole-archive $in $solibs -Wl," "--no-whole-archive $libs"
+                "-Wl,--whole-archive $in $solibs -Wl,--no-whole-archive $libs"
             ),
             pool="link_pool",
         )
@@ -2684,7 +2676,7 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params, config_name
         master_ninja.rule(
             "link",
             description="LINK $out, POSTBUILDS",
-            command=("$ld $ldflags -o $out " "$in $solibs $libs$postbuilds"),
+            command=("$ld $ldflags -o $out $in $solibs $libs$postbuilds"),
             pool="link_pool",
         )
         master_ninja.rule(

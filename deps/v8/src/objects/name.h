@@ -22,6 +22,10 @@ namespace compiler {
 class WasmGraphBuilder;
 }
 
+namespace maglev {
+class MaglevGraphBuilder;
+}
+
 class SharedStringAccessGuardIfNeeded;
 
 // The Name abstract class captures anything that can be used as a property
@@ -67,10 +71,11 @@ V8_OBJECT class Name : public PrimitiveHeapObject {
 
   // Equality operations.
   inline bool Equals(Tagged<Name> other);
-  inline static bool Equals(Isolate* isolate, Handle<Name> one,
-                            Handle<Name> two);
+  inline static bool Equals(Isolate* isolate, DirectHandle<Name> one,
+                            DirectHandle<Name> two);
 
   // Conversion.
+  inline bool IsArrayIndex();
   inline bool AsArrayIndex(uint32_t* index);
   inline bool AsIntegerIndex(size_t* index);
 
@@ -96,10 +101,10 @@ V8_OBJECT class Name : public PrimitiveHeapObject {
 
   // Return a string version of this name that is converted according to the
   // rules described in ES6 section 9.2.11.
-  V8_WARN_UNUSED_RESULT static MaybeHandle<String> ToFunctionName(
-      Isolate* isolate, Handle<Name> name);
-  V8_WARN_UNUSED_RESULT static MaybeHandle<String> ToFunctionName(
-      Isolate* isolate, Handle<Name> name, DirectHandle<String> prefix);
+  V8_WARN_UNUSED_RESULT static MaybeDirectHandle<String> ToFunctionName(
+      Isolate* isolate, DirectHandle<Name> name);
+  V8_WARN_UNUSED_RESULT static MaybeDirectHandle<String> ToFunctionName(
+      Isolate* isolate, DirectHandle<Name> name, DirectHandle<String> prefix);
 
   DECL_VERIFIER(Name)
   DECL_PRINTER(Name)
@@ -219,6 +224,8 @@ V8_OBJECT class Name : public PrimitiveHeapObject {
   friend class V8HeapExplorer;
   friend class CodeStubAssembler;
   friend class StringBuiltinsAssembler;
+  friend class SandboxTesting;
+  friend class maglev::MaglevGraphBuilder;
   friend class maglev::MaglevAssembler;
   friend class compiler::AccessBuilder;
   friend class compiler::WasmGraphBuilder;

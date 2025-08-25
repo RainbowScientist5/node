@@ -6,11 +6,14 @@
 
 """Unit tests for the common.py file."""
 
-import gyp.common
-import unittest
-import sys
 import os
-from unittest.mock import patch, MagicMock
+import subprocess
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
+
+import gyp.common
+
 
 class TestTopologicallySorted(unittest.TestCase):
     def test_Valid(self):
@@ -83,22 +86,34 @@ class TestGetFlavor(unittest.TestCase):
     @patch("os.close")
     @patch("os.unlink")
     @patch("tempfile.mkstemp")
-    def test_GetCrossCompilerPredefines(self, mock_mkstemp, mock_unlink, mock_close):
+    def test_GetCompilerPredefines(self, mock_mkstemp, mock_unlink, mock_close):
         mock_close.return_value = None
         mock_unlink.return_value = None
         mock_mkstemp.return_value = (0, "temp.c")
 
-        def mock_run(env, defines_stdout, expected_cmd):
+        def mock_run(env, defines_stdout, expected_cmd, throws=False):
             with patch("subprocess.run") as mock_run:
-                mock_process = MagicMock()
-                mock_process.returncode = 0
-                mock_process.stdout = TestGetFlavor.MockCommunicate(defines_stdout)
-                mock_run.return_value = mock_process
                 expected_input = "temp.c" if sys.platform == "win32" else "/dev/null"
+                if throws:
+                    mock_run.side_effect = subprocess.CalledProcessError(
+                        returncode=1,
+                        cmd=[
+                            *expected_cmd,
+                            "-dM", "-E", "-x", "c", expected_input
+                        ]
+                    )
+                else:
+                    mock_process = MagicMock()
+                    mock_process.returncode = 0
+                    mock_process.stdout = TestGetFlavor.MockCommunicate(defines_stdout)
+                    mock_run.return_value = mock_process
                 with patch.dict(os.environ, env):
-                    defines = gyp.common.GetCrossCompilerPredefines()
+                    try:
+                        defines = gyp.common.GetCompilerPredefines()
+                    except Exception as e:
+                        self.fail(f"GetCompilerPredefines raised an exception: {e}")
                     flavor = gyp.common.GetFlavor({})
-                if env.get("CC_target"):
+                if env.get("CC_target") or env.get("CC"):
                     mock_run.assert_called_with(
                         [
                             *expected_cmd,
@@ -108,15 +123,18 @@ class TestGetFlavor(unittest.TestCase):
                         capture_output=True, check=True)
                 return [defines, flavor]
 
+        [defines0, _] = mock_run({ "CC": "cl.exe" }, "", ["cl.exe"], True)
+        assert defines0 == {}
+
         [defines1, _] = mock_run({}, "", [])
-        assert {} == defines1
+        assert defines1 == {}
 
         [defines2, flavor2] = mock_run(
             { "CC_target": "/opt/wasi-sdk/bin/clang" },
             "#define __wasm__ 1\n#define __wasi__ 1\n",
             ["/opt/wasi-sdk/bin/clang"]
         )
-        assert { "__wasm__": "1", "__wasi__": "1" } == defines2
+        assert defines2 == { "__wasm__": "1", "__wasi__": "1" }
         assert flavor2 == "wasi"
 
         [defines3, flavor3] = mock_run(
@@ -124,7 +142,7 @@ class TestGetFlavor(unittest.TestCase):
             "#define __wasm__ 1\n",
             ["/opt/wasi-sdk/bin/clang", "--target=wasm32"]
         )
-        assert { "__wasm__": "1" } == defines3
+        assert defines3 == { "__wasm__": "1" }
         assert flavor3 == "wasm"
 
         [defines4, flavor4] = mock_run(
@@ -132,7 +150,7 @@ class TestGetFlavor(unittest.TestCase):
             "#define __EMSCRIPTEN__ 1\n",
             ["/emsdk/upstream/emscripten/emcc"]
         )
-        assert { "__EMSCRIPTEN__": "1" } == defines4
+        assert defines4 == { "__EMSCRIPTEN__": "1" }
         assert flavor4 == "emscripten"
 
         # Test path which include white space
@@ -149,11 +167,11 @@ class TestGetFlavor(unittest.TestCase):
                 "-pthread"
             ]
         )
-        assert {
+        assert defines5 == {
             "__wasm__": "1",
             "__wasi__": "1",
             "_REENTRANT": "1"
-        } == defines5
+        }
         assert flavor5 == "wasi"
 
         original_sep = os.sep
@@ -164,7 +182,7 @@ class TestGetFlavor(unittest.TestCase):
             ["C:/Program Files/wasi-sdk/clang.exe"]
         )
         os.sep = original_sep
-        assert { "__wasm__": "1", "__wasi__": "1" } == defines6
+        assert defines6 == { "__wasm__": "1", "__wasi__": "1" }
         assert flavor6 == "wasi"
 
 if __name__ == "__main__":

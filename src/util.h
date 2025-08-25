@@ -25,6 +25,7 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "uv.h"
+#include "v8-inspector.h"
 #include "v8.h"
 
 #include "node.h"
@@ -42,6 +43,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <string>
 #include <string_view>
@@ -314,7 +316,7 @@ class KVStore {
                         v8::Local<v8::String> key) const = 0;
   virtual int32_t Query(const char* key) const = 0;
   virtual void Delete(v8::Isolate* isolate, v8::Local<v8::String> key) = 0;
-  virtual v8::Local<v8::Array> Enumerate(v8::Isolate* isolate) const = 0;
+  virtual v8::MaybeLocal<v8::Array> Enumerate(v8::Isolate* isolate) const = 0;
 
   virtual std::shared_ptr<KVStore> Clone(v8::Isolate* isolate) const;
   virtual v8::Maybe<void> AssignFromObject(v8::Local<v8::Context> context,
@@ -340,18 +342,23 @@ inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
                                            const unsigned char* data,
                                            int length = -1);
 
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           std::string_view str);
+
 // Used to be a macro, hence the uppercase name.
-template <int N>
-inline v8::Local<v8::String> FIXED_ONE_BYTE_STRING(
-    v8::Isolate* isolate,
-    const char(&data)[N]) {
+template <std::size_t N>
+  requires(N > 0)
+inline v8::Local<v8::String> FIXED_ONE_BYTE_STRING(v8::Isolate* isolate,
+                                                   const char (&data)[N]) {
+  CHECK_EQ(data[N - 1], '\0');
   return OneByteString(isolate, data, N - 1);
 }
 
 template <std::size_t N>
+  requires(N > 0)
 inline v8::Local<v8::String> FIXED_ONE_BYTE_STRING(
-    v8::Isolate* isolate,
-    const std::array<char, N>& arr) {
+    v8::Isolate* isolate, const std::array<char, N>& arr) {
+  CHECK_EQ(arr[N - 1], '\0');
   return OneByteString(isolate, arr.data(), N - 1);
 }
 
@@ -384,6 +391,11 @@ constexpr size_t strsize(const T (&)[N]) {
 template <typename T, size_t kStackStorageSize = 1024>
 class MaybeStackBuffer {
  public:
+  // Disallow copy constructor
+  MaybeStackBuffer(const MaybeStackBuffer&) = delete;
+  // Disallow copy assignment operator
+  MaybeStackBuffer& operator=(const MaybeStackBuffer& other) = delete;
+
   const T* out() const {
     return buf_;
   }
@@ -646,38 +658,6 @@ struct MallocedBuffer {
   MallocedBuffer& operator=(const MallocedBuffer&) = delete;
 };
 
-template <typename T>
-class NonCopyableMaybe {
- public:
-  NonCopyableMaybe() : empty_(true) {}
-  explicit NonCopyableMaybe(T&& value)
-      : empty_(false),
-        value_(std::move(value)) {}
-
-  bool IsEmpty() const {
-    return empty_;
-  }
-
-  const T* get() const {
-    return empty_ ? nullptr : &value_;
-  }
-
-  const T* operator->() const {
-    CHECK(!empty_);
-    return &value_;
-  }
-
-  T&& Release() {
-    CHECK_EQ(empty_, false);
-    empty_ = true;
-    return std::move(value_);
-  }
-
- private:
-  bool empty_;
-  T value_;
-};
-
 // Test whether some value can be called with ().
 template <typename T, typename = void>
 struct is_callable : std::is_function<T> { };
@@ -706,12 +686,13 @@ using DeleteFnPtr = typename FunctionDeleter<T, function>::Pointer;
 inline v8::Maybe<void> FromV8Array(v8::Local<v8::Context> context,
                                    v8::Local<v8::Array> js_array,
                                    std::vector<v8::Global<v8::Value>>* out);
-std::vector<std::string_view> SplitString(const std::string_view in,
-                                          const std::string_view delim);
 
 inline v8::MaybeLocal<v8::Value> ToV8Value(v8::Local<v8::Context> context,
                                            std::string_view str,
                                            v8::Isolate* isolate = nullptr);
+inline v8::MaybeLocal<v8::Value> ToV8Value(v8::Local<v8::Context> context,
+                                           v8_inspector::StringView str,
+                                           v8::Isolate* isolate);
 template <typename T, typename test_for_number =
     typename std::enable_if<std::numeric_limits<T>::is_specialized, bool>::type>
 inline v8::MaybeLocal<v8::Value> ToV8Value(v8::Local<v8::Context> context,
@@ -729,6 +710,12 @@ template <typename T, typename U>
 inline v8::MaybeLocal<v8::Value> ToV8Value(v8::Local<v8::Context> context,
                                            const std::unordered_map<T, U>& map,
                                            v8::Isolate* isolate = nullptr);
+
+template <typename T, std::size_t U>
+inline v8::MaybeLocal<v8::Value> ToV8Value(
+    v8::Local<v8::Context> context,
+    const std::ranges::elements_view<T, U>& vec,
+    v8::Isolate* isolate = nullptr);
 
 // These macros expects a `Isolate* isolate` and a `Local<Context> context`
 // to be in the scope.
@@ -837,7 +824,11 @@ class PersistentToLocal {
 // computations.
 class FastStringKey {
  public:
-  constexpr explicit FastStringKey(std::string_view name);
+  // consteval ensures that the argument is a compile-time constant.
+  consteval explicit FastStringKey(std::string_view name);
+  // passing something that is not a compile-time constant needs explicit
+  // opt-in via this helper, as it defeats the purpose of FastStringKey.
+  static constexpr FastStringKey AllowDynamic(std::string_view name);
 
   struct Hash {
     constexpr size_t operator()(const FastStringKey& key) const;
@@ -847,6 +838,8 @@ class FastStringKey {
   constexpr std::string_view as_string_view() const;
 
  private:
+  constexpr explicit FastStringKey(std::string_view name, int dummy);
+
   static constexpr size_t HashImpl(std::string_view str);
 
   const std::string_view name_;
@@ -941,6 +934,16 @@ void SetMethodNoSideEffect(v8::Isolate* isolate,
                            const std::string_view name,
                            v8::FunctionCallback callback);
 
+// Set the Symbol.dispose method on the prototype of the class.
+void SetProtoDispose(v8::Isolate* isolate,
+                     v8::Local<v8::FunctionTemplate> that,
+                     v8::FunctionCallback callback);
+
+// Set the Symbol.asyncDispose method on the prototype of the class.
+void SetProtoAsyncDispose(v8::Isolate* isolate,
+                          v8::Local<v8::FunctionTemplate> that,
+                          v8::FunctionCallback callback);
+
 enum class SetConstructorFunctionFlag {
   NONE,
   SET_CLASS_NAME,
@@ -1009,9 +1012,12 @@ v8::Maybe<int> GetValidFileMode(Environment* env,
                                 v8::Local<v8::Value> input,
                                 uv_fs_type type);
 
+#ifdef _WIN32
 // Returns true if OS==Windows and filename ends in .bat or .cmd,
 // case insensitive.
 inline bool IsWindowsBatchFile(const char* filename);
+inline std::wstring ConvertToWideString(const std::string& str, UINT code_page);
+#endif  // _WIN32
 
 }  // namespace node
 

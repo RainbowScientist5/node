@@ -2,7 +2,7 @@ const { resolve, dirname, join } = require('node:path')
 const Config = require('@npmcli/config')
 const which = require('which')
 const fs = require('node:fs/promises')
-const { definitions, flatten, shorthands } = require('@npmcli/config/lib/definitions')
+const { definitions, flatten, nerfDarts, shorthands } = require('@npmcli/config/lib/definitions')
 const usage = require('./utils/npm-usage.js')
 const LogFile = require('./utils/log-file.js')
 const Timers = require('./utils/timers.js')
@@ -68,6 +68,7 @@ class Npm {
       npmPath: this.#npmRoot,
       definitions,
       flatten,
+      nerfDarts,
       shorthands,
       argv: [...process.argv, ...argv],
       excludeNpmCwd,
@@ -220,7 +221,7 @@ class Npm {
     const command = new Command(this)
 
     // since 'test', 'start', 'stop', etc. commands re-enter this function
-    // to call the run-script command, we need to only set it one time.
+    // to call the run command, we need to only set it one time.
     if (!this.#command) {
       this.#command = command
       process.env.npm_command = this.command

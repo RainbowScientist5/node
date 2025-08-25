@@ -451,7 +451,7 @@ session.on('timeout', () => { /* .. */ });
 added: v9.4.0
 -->
 
-* {string|undefined}
+* Type: {string|undefined}
 
 Value will be `undefined` if the `Http2Session` is not yet connected to a
 socket, `h2c` if the `Http2Session` is not connected to a `TLSSocket`, or
@@ -480,7 +480,7 @@ If specified, the `callback` function is registered as a handler for the
 added: v9.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Will be `true` if this `Http2Session` instance has been closed, otherwise
 `false`.
@@ -491,7 +491,7 @@ Will be `true` if this `Http2Session` instance has been closed, otherwise
 added: v10.0.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Will be `true` if this `Http2Session` instance is still connecting, will be set
 to `false` before emitting `connect` event and/or calling the `http2.connect`
@@ -525,7 +525,7 @@ If there are any remaining open `Http2Streams` associated with the
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Will be `true` if this `Http2Session` instance has been destroyed and must no
 longer be used, otherwise `false`.
@@ -536,7 +536,7 @@ longer be used, otherwise `false`.
 added: v9.4.0
 -->
 
-* {boolean|undefined}
+* Type: {boolean|undefined}
 
 Value is `undefined` if the `Http2Session` session socket has not yet been
 connected, `true` if the `Http2Session` is connected with a `TLSSocket`,
@@ -563,7 +563,7 @@ Transmits a `GOAWAY` frame to the connected peer _without_ shutting down the
 added: v8.4.0
 -->
 
-* {HTTP/2 Settings Object}
+* Type: {HTTP/2 Settings Object}
 
 A prototype-less object describing the current local settings of this
 `Http2Session`. The local settings are local to _this_ `Http2Session` instance.
@@ -574,7 +574,7 @@ A prototype-less object describing the current local settings of this
 added: v9.4.0
 -->
 
-* {string\[]|undefined}
+* Type: {string\[]|undefined}
 
 If the `Http2Session` is connected to a `TLSSocket`, the `originSet` property
 will return an `Array` of origins for which the `Http2Session` may be
@@ -588,7 +588,7 @@ The `originSet` property is only available when using a secure TLS connection.
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Indicates whether the `Http2Session` is currently waiting for acknowledgment of
 a sent `SETTINGS` frame. Will be `true` after calling the
@@ -655,7 +655,7 @@ instance's underlying [`net.Socket`][].
 added: v8.4.0
 -->
 
-* {HTTP/2 Settings Object}
+* Type: {HTTP/2 Settings Object}
 
 A prototype-less object describing the current remote settings of this
 `Http2Session`. The remote settings are set by the _connected_ HTTP/2 peer.
@@ -725,7 +725,7 @@ registered as a listener on the `'timeout'` event.
 added: v8.4.0
 -->
 
-* {net.Socket|tls.TLSSocket}
+* Type: {net.Socket|tls.TLSSocket}
 
 Returns a `Proxy` object that acts as a `net.Socket` (or `tls.TLSSocket`) but
 limits available methods to ones safe to use with HTTP/2.
@@ -747,7 +747,7 @@ added: v8.4.0
 Provides miscellaneous information about the current state of the
 `Http2Session`.
 
-* {Object}
+* Type: {Object}
   * `effectiveLocalWindowSize` {number} The current local (receive)
     flow control window size for the `Http2Session`.
   * `effectiveRecvDataLength` {number} The current number of bytes
@@ -805,7 +805,7 @@ multiple `SETTINGS` frames while acknowledgment is still pending.
 added: v8.4.0
 -->
 
-* {number}
+* Type: {number}
 
 The `http2session.type` will be equal to
 `http2.constants.NGHTTP2_SESSION_SERVER` if this `Http2Session` instance is a
@@ -1071,9 +1071,25 @@ The `'origin'` event is only emitted when using a secure TLS connection.
 
 <!-- YAML
 added: v8.4.0
+changes:
+  - version: v24.2.0
+    pr-url: https://github.com/nodejs/node/pull/58293
+    description: The `weight` option is now ignored, setting it will trigger a
+                 runtime warning.
+  - version:
+      - v24.2.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/58313
+    description: Following the deprecation of priority signaling as of RFC 9113,
+                 `weight` option is deprecated.
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57917
+    description: Allow passing headers in raw array format.
 -->
 
-* `headers` {HTTP/2 Headers Object}
+* `headers` {HTTP/2 Headers Object|Array}
 
 * `options` {Object}
   * `endStream` {boolean} `true` if the `Http2Stream` _writable_ side should
@@ -1085,9 +1101,6 @@ added: v8.4.0
     **Default:** `false`.
   * `parent` {number} Specifies the numeric identifier of a stream the newly
     created stream is dependent on.
-  * `weight` {number} Specifies the relative dependency of a stream in relation
-    to other streams with the same `parent`. The value is a number between `1`
-    and `256` (inclusive).
   * `waitForTrailers` {boolean} When `true`, the `Http2Stream` will emit the
     `'wantTrailers'` event after the final `DATA` frame has been sent.
   * `signal` {AbortSignal} An AbortSignal that may be used to abort an ongoing
@@ -1360,7 +1373,7 @@ option must be set for this event to be emitted.
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Set to `true` if the `Http2Stream` instance was aborted abnormally. When set,
 the `'aborted'` event will have been emitted.
@@ -1373,7 +1386,7 @@ added:
  - v10.16.0
 -->
 
-* {number}
+* Type: {number}
 
 This property shows the number of characters currently buffered to be written.
 See [`net.Socket.bufferSize`][] for details.
@@ -1404,7 +1417,7 @@ connected HTTP/2 peer.
 added: v9.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Set to `true` if the `Http2Stream` instance has been closed.
 
@@ -1414,7 +1427,7 @@ Set to `true` if the `Http2Stream` instance has been closed.
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Set to `true` if the `Http2Stream` instance has been destroyed and is no longer
 usable.
@@ -1425,7 +1438,7 @@ usable.
 added: v10.11.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Set to `true` if the `END_STREAM` flag was set in the request or response
 HEADERS frame received, indicating that no additional data should be received
@@ -1437,7 +1450,7 @@ and the readable side of the `Http2Stream` will be closed.
 added: v8.4.0
 -->
 
-* {number|undefined}
+* Type: {number|undefined}
 
 The numeric stream identifier of this `Http2Stream` instance. Set to `undefined`
 if the stream identifier has not yet been assigned.
@@ -1448,7 +1461,7 @@ if the stream identifier has not yet been assigned.
 added: v9.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Set to `true` if the `Http2Stream` instance has not yet been assigned a
 numeric stream identifier.
@@ -1457,22 +1470,20 @@ numeric stream identifier.
 
 <!-- YAML
 added: v8.4.0
+deprecated:
+ - v24.2.0
+ - v22.17.0
+changes:
+  - version: v24.2.0
+    pr-url: https://github.com/nodejs/node/pull/58293
+    description: This method no longer sets the priority of the stream. Using it
+                 now triggers a runtime warning.
 -->
 
-* `options` {Object}
-  * `exclusive` {boolean} When `true` and `parent` identifies a parent Stream,
-    this stream is made the sole direct dependency of the parent, with
-    all other existing dependents made a dependent of this stream. **Default:**
-    `false`.
-  * `parent` {number} Specifies the numeric identifier of a stream this stream
-    is dependent on.
-  * `weight` {number} Specifies the relative dependency of a stream in relation
-    to other streams with the same `parent`. The value is a number between `1`
-    and `256` (inclusive).
-  * `silent` {boolean} When `true`, changes the priority locally without
-    sending a `PRIORITY` frame to the connected peer.
+> Stability: 0 - Deprecated: support for priority signaling has been deprecated
+> in the [RFC 9113][] and is no longer supported in Node.js.
 
-Updates the priority for this `Http2Stream` instance.
+Empty method, only there to maintain some backward compatibility.
 
 #### `http2stream.rstCode`
 
@@ -1480,7 +1491,7 @@ Updates the priority for this `Http2Stream` instance.
 added: v8.4.0
 -->
 
-* {number}
+* Type: {number}
 
 Set to the `RST_STREAM` [error code][] reported when the `Http2Stream` is
 destroyed after either receiving an `RST_STREAM` frame from the connected peer,
@@ -1493,7 +1504,7 @@ calling `http2stream.close()`, or `http2stream.destroy()`. Will be
 added: v9.5.0
 -->
 
-* {HTTP/2 Headers Object}
+* Type: {HTTP/2 Headers Object}
 
 An object containing the outbound headers sent for this `Http2Stream`.
 
@@ -1503,7 +1514,7 @@ An object containing the outbound headers sent for this `Http2Stream`.
 added: v9.5.0
 -->
 
-* {HTTP/2 Headers Object\[]}
+* Type: {HTTP/2 Headers Object\[]}
 
 An array of objects containing the outbound informational (additional) headers
 sent for this `Http2Stream`.
@@ -1514,7 +1525,7 @@ sent for this `Http2Stream`.
 added: v9.5.0
 -->
 
-* {HTTP/2 Headers Object}
+* Type: {HTTP/2 Headers Object}
 
 An object containing the outbound trailers sent for this `HttpStream`.
 
@@ -1524,7 +1535,7 @@ An object containing the outbound trailers sent for this `HttpStream`.
 added: v8.4.0
 -->
 
-* {Http2Session}
+* Type: {Http2Session}
 
 A reference to the `Http2Session` instance that owns this `Http2Stream`. The
 value will be `undefined` after the `Http2Stream` instance is destroyed.
@@ -1568,12 +1579,23 @@ req.setTimeout(5000, () => req.close(NGHTTP2_CANCEL));
 
 <!-- YAML
 added: v8.4.0
+changes:
+  - version: v24.2.0
+    pr-url: https://github.com/nodejs/node/pull/58293
+    description: The `state.weight` property is now always set to 16 and
+                 `sumDependencyWeight` is always set to 0.
+  - version:
+      - v24.2.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/58313
+    description: Following the deprecation of priority signaling as of RFC 9113,
+                 `weight` and `sumDependencyWeight` options are deprecated.
 -->
 
 Provides miscellaneous information about the current state of the
 `Http2Stream`.
 
-* {Object}
+* Type: {Object}
   * `localWindowSize` {number} The number of bytes the connected peer may send
     for this `Http2Stream` without receiving a `WINDOW_UPDATE`.
   * `state` {number} A flag indicating the low-level current state of the
@@ -1581,10 +1603,8 @@ Provides miscellaneous information about the current state of the
   * `localClose` {number} `1` if this `Http2Stream` has been closed locally.
   * `remoteClose` {number} `1` if this `Http2Stream` has been closed
     remotely.
-  * `sumDependencyWeight` {number} The sum weight of all `Http2Stream`
-    instances that depend on this `Http2Stream` as specified using
-    `PRIORITY` frames.
-  * `weight` {number} The priority weight of this `Http2Stream`.
+  * `sumDependencyWeight` {number} Legacy property, always set to `0`.
+  * `weight` {number} Legacy property, always set to `16`.
 
 A current state of this `Http2Stream`.
 
@@ -1753,7 +1773,7 @@ Sends an additional informational `HEADERS` frame to the connected HTTP/2 peer.
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 True if headers were sent, false otherwise (read-only).
 
@@ -1763,7 +1783,7 @@ True if headers were sent, false otherwise (read-only).
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Read-only property mapped to the `SETTINGS_ENABLE_PUSH` flag of the remote
 client's most recent `SETTINGS` frame. Will be `true` if the remote peer
@@ -1842,13 +1862,17 @@ and will throw an error.
 added: v8.4.0
 changes:
   - version:
+    - REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/59455
+    description: Allow passing headers in raw array format.
+  - version:
     - v14.5.0
     - v12.19.0
     pr-url: https://github.com/nodejs/node/pull/33160
     description: Allow explicitly setting date headers.
 -->
 
-* `headers` {HTTP/2 Headers Object}
+* `headers` {HTTP/2 Headers Object|Array}
 * `options` {Object}
   * `endStream` {boolean} Set to `true` to indicate that the response will not
     include payload data.
@@ -2421,9 +2445,11 @@ closed, although the server has already stopped allowing new sessions. See
 
 <!-- YAML
 added: v20.4.0
+changes:
+ - version: v24.2.0
+   pr-url: https://github.com/nodejs/node/pull/58467
+   description: No longer experimental.
 -->
-
-> Stability: 1 - Experimental
 
 Calls [`server.close()`][] and returns a promise that fulfills when the
 server has closed.
@@ -2466,7 +2492,7 @@ changes:
     description: The default timeout changed from 120s to 0 (no timeout).
 -->
 
-* {number} Timeout in milliseconds. **Default:** 0 (no timeout)
+* Type: {number} Timeout in milliseconds. **Default:** 0 (no timeout)
 
 The number of milliseconds of inactivity before a socket is presumed
 to have timed out.
@@ -2735,7 +2761,7 @@ changes:
     description: The default timeout changed from 120s to 0 (no timeout).
 -->
 
-* {number} Timeout in milliseconds. **Default:** 0 (no timeout)
+* Type: {number} Timeout in milliseconds. **Default:** 0 (no timeout)
 
 The number of milliseconds of inactivity before a socket is presumed
 to have timed out.
@@ -2899,7 +2925,11 @@ changes:
     a server should wait when an [`'unknownProtocol'`][] is emitted. If the
     socket has not been destroyed by that time the server will destroy it.
     **Default:** `10000`.
-  * ...: Any [`net.createServer()`][] option can be provided.
+  * `strictFieldWhitespaceValidation` {boolean} If `true`, it turns on strict leading
+    and trailing whitespace validation for HTTP/2 header field names and values
+    as per [RFC-9113](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.2.1).
+    **Default:** `true`.
+  * `...options` {Object} Any [`net.createServer()`][] option can be provided.
 * `onRequestHandler` {Function} See [Compatibility API][]
 * Returns: {Http2Server}
 
@@ -3055,18 +3085,25 @@ changes:
     **Default:** `100`.
   * `settings` {HTTP/2 Settings Object} The initial settings to send to the
     remote peer upon connection.
+  * `streamResetBurst` {number} and `streamResetRate` {number} Sets the rate
+    limit for the incoming stream reset (RST\_STREAM frame). Both settings must
+    be set to have any effect, and default to 1000 and 33 respectively.
   * `remoteCustomSettings` {Array} The array of integer values determines the
     settings types, which are included in the `customSettings`-property of the
     received remoteSettings. Please see the `customSettings`-property of the
     `Http2Settings` object for more information, on the allowed setting types.
-  * ...: Any [`tls.createServer()`][] options can be provided. For
-    servers, the identity options (`pfx` or `key`/`cert`) are usually required.
+  * `...options` {Object} Any [`tls.createServer()`][] options can be provided.
+    For servers, the identity options (`pfx` or `key`/`cert`) are usually required.
   * `origins` {string\[]} An array of origin strings to send within an `ORIGIN`
     frame immediately following creation of a new server `Http2Session`.
   * `unknownProtocolTimeout` {number} Specifies a timeout in milliseconds that
     a server should wait when an [`'unknownProtocol'`][] event is emitted. If
     the socket has not been destroyed by that time the server will destroy it.
     **Default:** `10000`.
+  * `strictFieldWhitespaceValidation` {boolean} If `true`, it turns on strict leading
+    and trailing whitespace validation for HTTP/2 header field names and values
+    as per [RFC-9113](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.2.1).
+    **Default:** `true`.
 * `onRequestHandler` {Function} See [Compatibility API][]
 * Returns: {Http2SecureServer}
 
@@ -3217,11 +3254,16 @@ changes:
   * `createConnection` {Function} An optional callback that receives the `URL`
     instance passed to `connect` and the `options` object, and returns any
     [`Duplex`][] stream that is to be used as the connection for this session.
-  * ...: Any [`net.connect()`][] or [`tls.connect()`][] options can be provided.
+  * `...options` {Object} Any [`net.connect()`][] or [`tls.connect()`][] options
+    can be provided.
   * `unknownProtocolTimeout` {number} Specifies a timeout in milliseconds that
     a server should wait when an [`'unknownProtocol'`][] event is emitted. If
     the socket has not been destroyed by that time the server will destroy it.
     **Default:** `10000`.
+  * `strictFieldWhitespaceValidation` {boolean} If `true`, it turns on strict leading
+    and trailing whitespace validation for HTTP/2 header field names and values
+    as per [RFC-9113](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.2.1).
+    **Default:** `true`.
 * `listener` {Function} Will be registered as a one-time listener of the
   [`'connect'`][] event.
 * Returns: {ClientHttp2Session}
@@ -3338,8 +3380,7 @@ added:
 -->
 
 * `socket` {stream.Duplex}
-* `options` {Object}
-  * ...: Any [`http2.createServer()`][] option can be provided.
+* `options` {Object} Any [`http2.createServer()`][] option can be provided.
 * Returns: {ServerHttp2Session}
 
 Create an HTTP/2 server session from an existing socket.
@@ -3352,7 +3393,7 @@ added:
   - v14.18.0
 -->
 
-* {symbol}
+* Type: {symbol}
 
 This symbol can be set as a property on the HTTP/2 headers object with an array
 value in order to provide a list of headers considered sensitive.
@@ -3916,7 +3957,7 @@ Just like `'end'`, this event occurs only once per response.
 added: v10.1.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 The `request.aborted` property will be `true` if the request has
 been aborted.
@@ -3927,7 +3968,7 @@ been aborted.
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 The request authority pseudo header field. Because HTTP/2 allows requests
 to set either `:authority` or `host`, this value is derived from
@@ -3940,7 +3981,7 @@ to set either `:authority` or `host`, this value is derived from
 added: v12.10.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 The `request.complete` property will be `true` if the request has
 been completed, aborted, or destroyed.
@@ -3954,7 +3995,7 @@ deprecated: v13.0.0
 
 > Stability: 0 - Deprecated. Use [`request.socket`][].
 
-* {net.Socket|tls.TLSSocket}
+* Type: {net.Socket|tls.TLSSocket}
 
 See [`request.socket`][].
 
@@ -3978,7 +4019,7 @@ It does nothing if the stream was already destroyed.
 added: v8.4.0
 -->
 
-* {Object}
+* Type: {Object}
 
 The request/response headers object.
 
@@ -4012,7 +4053,7 @@ assert(request.url);   // Fails because the :path header has been removed
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 In case of server request, the HTTP version sent by the client. In the case of
 client response, the HTTP version of the connected-to server. Returns
@@ -4027,7 +4068,7 @@ Also `message.httpVersionMajor` is the first integer and
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 The request method as a string. Read-only. Examples: `'GET'`, `'DELETE'`.
 
@@ -4037,7 +4078,7 @@ The request method as a string. Read-only. Examples: `'GET'`, `'DELETE'`.
 added: v8.4.0
 -->
 
-* {string\[]}
+* Type: {string\[]}
 
 The raw request/response headers list exactly as they were received.
 
@@ -4067,7 +4108,7 @@ console.log(request.rawHeaders);
 added: v8.4.0
 -->
 
-* {string\[]}
+* Type: {string\[]}
 
 The raw request/response trailer keys and values exactly as they were
 received. Only populated at the `'end'` event.
@@ -4078,7 +4119,7 @@ received. Only populated at the `'end'` event.
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 The request scheme pseudo header field indicating the scheme
 portion of the target URL.
@@ -4108,7 +4149,7 @@ events, timed out sockets must be handled explicitly.
 added: v8.4.0
 -->
 
-* {net.Socket|tls.TLSSocket}
+* Type: {net.Socket|tls.TLSSocket}
 
 Returns a `Proxy` object that acts as a `net.Socket` (or `tls.TLSSocket`) but
 applies getters, setters, and methods based on HTTP/2 logic.
@@ -4135,7 +4176,7 @@ authentication details.
 added: v8.4.0
 -->
 
-* {Http2Stream}
+* Type: {Http2Stream}
 
 The [`Http2Stream`][] object backing the request.
 
@@ -4145,7 +4186,7 @@ The [`Http2Stream`][] object backing the request.
 added: v8.4.0
 -->
 
-* {Object}
+* Type: {Object}
 
 The request/response trailers object. Only populated at the `'end'` event.
 
@@ -4155,7 +4196,7 @@ The request/response trailers object. Only populated at the `'end'` event.
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 Request URL string. This contains only the URL that is present in the actual
 HTTP request. If the request is:
@@ -4282,7 +4323,7 @@ deprecated: v13.0.0
 
 > Stability: 0 - Deprecated. Use [`response.socket`][].
 
-* {net.Socket|tls.TLSSocket}
+* Type: {net.Socket|tls.TLSSocket}
 
 See [`response.socket`][].
 
@@ -4348,7 +4389,7 @@ deprecated:
 
 > Stability: 0 - Deprecated. Use [`response.writableEnded`][].
 
-* {boolean}
+* Type: {boolean}
 
 Boolean value that indicates whether the response has completed. Starts
 as `false`. After [`response.end()`][] executes, the value will be `true`.
@@ -4437,7 +4478,7 @@ const hasContentType = response.hasHeader('content-type');
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 True if headers were sent, false otherwise (read-only).
 
@@ -4461,7 +4502,7 @@ response.removeHeader('Content-Encoding');
 added: v15.7.0
 -->
 
-* {http2.Http2ServerRequest}
+* Type: {http2.Http2ServerRequest}
 
 A reference to the original HTTP2 `request` object.
 
@@ -4471,7 +4512,7 @@ A reference to the original HTTP2 `request` object.
 added: v8.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 When true, the Date header will be automatically generated and sent in
 the response if it is not already present in the headers. Defaults to true.
@@ -4544,7 +4585,7 @@ events, timed out sockets must be handled explicitly.
 added: v8.4.0
 -->
 
-* {net.Socket|tls.TLSSocket}
+* Type: {net.Socket|tls.TLSSocket}
 
 Returns a `Proxy` object that acts as a `net.Socket` (or `tls.TLSSocket`) but
 applies getters, setters, and methods based on HTTP/2 logic.
@@ -4587,7 +4628,7 @@ const server = http2.createServer((req, res) => {
 added: v8.4.0
 -->
 
-* {number}
+* Type: {number}
 
 When using implicit headers (not calling [`response.writeHead()`][] explicitly),
 this property controls the status code that will be sent to the client when
@@ -4606,7 +4647,7 @@ status code which was sent out.
 added: v8.4.0
 -->
 
-* {string}
+* Type: {string}
 
 Status message is not supported by HTTP/2 (RFC 7540 8.1.2.4). It returns
 an empty string.
@@ -4617,7 +4658,7 @@ an empty string.
 added: v8.4.0
 -->
 
-* {Http2Stream}
+* Type: {Http2Stream}
 
 The [`Http2Stream`][] object backing the response.
 
@@ -4627,7 +4668,7 @@ The [`Http2Stream`][] object backing the response.
 added: v12.9.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after [`response.end()`][] has been called. This property
 does not indicate whether the data has been flushed, for this use
@@ -4878,6 +4919,7 @@ you need to implement any fall-back behavior yourself.
 [RFC 7838]: https://tools.ietf.org/html/rfc7838
 [RFC 8336]: https://tools.ietf.org/html/rfc8336
 [RFC 8441]: https://tools.ietf.org/html/rfc8441
+[RFC 9113]: https://datatracker.ietf.org/doc/html/rfc9113#section-5.3.1
 [Sensitive headers]: #sensitive-headers
 [`'checkContinue'`]: #event-checkcontinue
 [`'connect'`]: #event-connect

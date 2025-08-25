@@ -114,7 +114,7 @@ and is not a string.
 added: v0.9.3
 -->
 
-* {string}
+* Type: {string}
 
 Provides the platform-specific path delimiter:
 
@@ -317,17 +317,19 @@ added: v0.11.2
 * `path` {string}
 * Returns: {boolean}
 
-The `path.isAbsolute()` method determines if `path` is an absolute path.
+The `path.isAbsolute()` method determines if the literal `path` is absolute.
+Therefore, it’s not safe for mitigating path traversals.
 
 If the given `path` is a zero-length string, `false` will be returned.
 
 For example, on POSIX:
 
 ```js
-path.isAbsolute('/foo/bar'); // true
-path.isAbsolute('/baz/..');  // true
-path.isAbsolute('qux/');     // false
-path.isAbsolute('.');        // false
+path.isAbsolute('/foo/bar');   // true
+path.isAbsolute('/baz/..');    // true
+path.isAbsolute('/baz/../..'); // true
+path.isAbsolute('qux/');       // false
+path.isAbsolute('.');          // false
 ```
 
 On Windows:
@@ -499,7 +501,7 @@ changes:
     description: Exposed as `require('path/posix')`.
 -->
 
-* {Object}
+* Type: {Object}
 
 The `path.posix` property provides access to POSIX specific implementations
 of the `path` methods.
@@ -593,7 +595,7 @@ A [`TypeError`][] is thrown if any of the arguments is not a string.
 added: v0.7.9
 -->
 
-* {string}
+* Type: {string}
 
 Provides the platform-specific path segment separator:
 
@@ -644,7 +646,7 @@ changes:
     description: Exposed as `require('path/win32')`.
 -->
 
-* {Object}
+* Type: {Object}
 
 The `path.win32` property provides access to Windows-specific implementations
 of the `path` methods.

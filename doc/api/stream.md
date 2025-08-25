@@ -62,9 +62,9 @@ functions for streams that return `Promise` objects rather than using
 callbacks. The API is accessible via `require('node:stream/promises')`
 or `require('node:stream').promises`.
 
-### `stream.pipeline(source[, ...transforms], destination[, options])`
-
 ### `stream.pipeline(streams[, options])`
+
+### `stream.pipeline(source[, ...transforms], destination[, options])`
 
 <!-- YAML
 added: v15.0.0
@@ -315,7 +315,7 @@ events (due to incorrect stream implementations) do not cause unexpected
 crashes. If this is unwanted behavior then `options.cleanup` should be set to
 `true`:
 
-```js
+```mjs
 await finished(rs, { cleanup: true });
 ```
 
@@ -568,7 +568,7 @@ function writeOneMillionTimes(writer, data, encoding, callback) {
 added: v0.9.4
 -->
 
-* {Error}
+* Type: {Error}
 
 The `'error'` event is emitted if an error occurred while writing or piping
 data. The listener callback is passed a single `Error` argument when called.
@@ -732,7 +732,7 @@ but instead implement [`writable._destroy()`][writable-_destroy].
 added: v18.0.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after `'close'` has been emitted.
 
@@ -742,7 +742,7 @@ Is `true` after `'close'` has been emitted.
 added: v8.0.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after [`writable.destroy()`][writable-destroy] has been called.
 
@@ -866,7 +866,7 @@ See also: [`writable.cork()`][].
 added: v11.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` if it is safe to call [`writable.write()`][stream-write], which means
 the stream has not been destroyed, errored, or ended.
@@ -877,11 +877,15 @@ the stream has not been destroyed, errored, or ended.
 added:
   - v18.0.0
   - v16.17.0
+changes:
+ - version:
+    - v24.0.0
+    - v22.17.0
+   pr-url: https://github.com/nodejs/node/pull/57513
+   description: Marking the API stable.
 -->
 
-> Stability: 1 - Experimental
-
-* {boolean}
+* Type: {boolean}
 
 Returns whether the stream was destroyed or errored before emitting `'finish'`.
 
@@ -891,7 +895,7 @@ Returns whether the stream was destroyed or errored before emitting `'finish'`.
 added: v12.9.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after [`writable.end()`][] has been called. This property
 does not indicate whether the data has been flushed, for this use
@@ -905,7 +909,7 @@ added:
  - v12.16.0
 -->
 
-* {integer}
+* Type: {integer}
 
 Number of times [`writable.uncork()`][stream-uncork] needs to be
 called in order to fully uncork the stream.
@@ -917,7 +921,7 @@ added:
   v18.0.0
 -->
 
-* {Error}
+* Type: {Error}
 
 Returns error if the stream has been destroyed with an error.
 
@@ -927,7 +931,7 @@ Returns error if the stream has been destroyed with an error.
 added: v12.6.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is set to `true` immediately before the [`'finish'`][] event is emitted.
 
@@ -937,7 +941,7 @@ Is set to `true` immediately before the [`'finish'`][] event is emitted.
 added: v9.3.0
 -->
 
-* {number}
+* Type: {number}
 
 Return the value of `highWaterMark` passed when creating this `Writable`.
 
@@ -947,7 +951,7 @@ Return the value of `highWaterMark` passed when creating this `Writable`.
 added: v9.4.0
 -->
 
-* {number}
+* Type: {number}
 
 This property contains the number of bytes (or objects) in the queue
 ready to be written. The value provides introspection data regarding
@@ -961,7 +965,7 @@ added:
   - v14.17.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` if the stream's buffer has been full and stream will emit `'drain'`.
 
@@ -971,7 +975,7 @@ Is `true` if the stream's buffer has been full and stream will emit `'drain'`.
 added: v12.3.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Getter for the property `objectMode` of a given `Writable` stream.
 
@@ -981,9 +985,11 @@ Getter for the property `objectMode` of a given `Writable` stream.
 added:
 - v22.4.0
 - v20.16.0
+changes:
+ - version: v24.2.0
+   pr-url: https://github.com/nodejs/node/pull/58467
+   description: No longer experimental.
 -->
-
-> Stability: 1 - Experimental
 
 Calls [`writable.destroy()`][writable-destroy] with an `AbortError` and returns
 a promise that fulfills when the stream is finished.
@@ -1283,7 +1289,7 @@ readable.on('end', () => {
 added: v0.9.4
 -->
 
-* {Error}
+* Type: {Error}
 
 The `'error'` event may be emitted by a `Readable` implementation at any time.
 Typically, this may occur if the underlying stream is unable to generate data
@@ -1412,7 +1418,7 @@ Implementors should not override this method, but instead implement
 added: v18.0.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after `'close'` has been emitted.
 
@@ -1422,7 +1428,7 @@ Is `true` after `'close'` has been emitted.
 added: v8.0.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` after [`readable.destroy()`][readable-destroy] has been called.
 
@@ -1632,7 +1638,7 @@ been emitted will return `null`. No runtime error will be raised.
 added: v11.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Is `true` if it is safe to call [`readable.read()`][stream-read], which means
 the stream has not been destroyed or emitted `'error'` or `'end'`.
@@ -1641,11 +1647,15 @@ the stream has not been destroyed or emitted `'error'` or `'end'`.
 
 <!-- YAML
 added: v16.8.0
+changes:
+ - version:
+    - v24.0.0
+    - v22.17.0
+   pr-url: https://github.com/nodejs/node/pull/57513
+   description: Marking the API stable.
 -->
 
-> Stability: 1 - Experimental
-
-* {boolean}
+* Type: {boolean}
 
 Returns whether the stream was destroyed or errored before emitting `'end'`.
 
@@ -1655,11 +1665,15 @@ Returns whether the stream was destroyed or errored before emitting `'end'`.
 added:
   - v16.7.0
   - v14.18.0
+changes:
+ - version:
+    - v24.0.0
+    - v22.17.0
+   pr-url: https://github.com/nodejs/node/pull/57513
+   description: Marking the API stable.
 -->
 
-> Stability: 1 - Experimental
-
-* {boolean}
+* Type: {boolean}
 
 Returns whether `'data'` has been emitted.
 
@@ -1669,7 +1683,7 @@ Returns whether `'data'` has been emitted.
 added: v12.7.0
 -->
 
-* {null|string}
+* Type: {null|string}
 
 Getter for the property `encoding` of a given `Readable` stream. The `encoding`
 property can be set using the [`readable.setEncoding()`][] method.
@@ -1680,7 +1694,7 @@ property can be set using the [`readable.setEncoding()`][] method.
 added: v12.9.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Becomes `true` when [`'end'`][] event is emitted.
 
@@ -1691,7 +1705,7 @@ added:
   v18.0.0
 -->
 
-* {Error}
+* Type: {Error}
 
 Returns error if the stream has been destroyed with an error.
 
@@ -1701,7 +1715,7 @@ Returns error if the stream has been destroyed with an error.
 added: v9.4.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 This property reflects the current state of a `Readable` stream as described
 in the [Three states][] section.
@@ -1712,7 +1726,7 @@ in the [Three states][] section.
 added: v9.3.0
 -->
 
-* {number}
+* Type: {number}
 
 Returns the value of `highWaterMark` passed when creating this `Readable`.
 
@@ -1722,7 +1736,7 @@ Returns the value of `highWaterMark` passed when creating this `Readable`.
 added: v9.4.0
 -->
 
-* {number}
+* Type: {number}
 
 This property contains the number of bytes (or objects) in the queue
 ready to be read. The value provides introspection data regarding
@@ -1734,7 +1748,7 @@ the status of the `highWaterMark`.
 added: v12.3.0
 -->
 
-* {boolean}
+* Type: {boolean}
 
 Getter for the property `objectMode` of a given `Readable` stream.
 
@@ -1990,9 +2004,11 @@ has less then 64 KiB of data because no `highWaterMark` option is provided to
 added:
  - v20.4.0
  - v18.18.0
+changes:
+ - version: v24.2.0
+   pr-url: https://github.com/nodejs/node/pull/58467
+   description: No longer experimental.
 -->
-
-> Stability: 1 - Experimental
 
 Calls [`readable.destroy()`][readable-destroy] with an `AbortError` and returns
 a promise that fulfills when the stream is finished.
@@ -2003,9 +2019,13 @@ a promise that fulfills when the stream is finished.
 added:
   - v19.1.0
   - v18.13.0
+changes:
+ - version:
+    - v24.0.0
+    - v22.17.0
+   pr-url: https://github.com/nodejs/node/pull/57513
+   description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `stream` {Stream|Iterable|AsyncIterable|Function}
 * `options` {Object}
@@ -2038,9 +2058,13 @@ See [`stream.compose`][] for more information.
 
 <!-- YAML
 added: v16.3.0
+changes:
+ - version:
+    - v24.0.0
+    - v22.17.0
+   pr-url: https://github.com/nodejs/node/pull/57513
+   description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `options` {Object}
   * `destroyOnReturn` {boolean} When set to `false`, calling `return` on the
@@ -2654,7 +2678,7 @@ Examples of `Duplex` streams include:
 added: v0.9.4
 -->
 
-* {boolean}
+* Type: {boolean}
 
 If `false` then the stream will automatically end the writable side when the
 readable side ends. Set initially by the `allowHalfOpen` constructor option,
@@ -3026,6 +3050,44 @@ console.log(res); // prints 'HELLOWORLD'
 
 See [`readable.compose(stream)`][] for `stream.compose` as operator.
 
+### `stream.isErrored(stream)`
+
+<!-- YAML
+added:
+  - v17.3.0
+  - v16.14.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
+-->
+
+* `stream` {Readable|Writable|Duplex|WritableStream|ReadableStream}
+* Returns: {boolean}
+
+Returns whether the stream has encountered an error.
+
+### `stream.isReadable(stream)`
+
+<!-- YAML
+added:
+  - v17.4.0
+  - v16.14.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
+-->
+
+* `stream` {Readable|Duplex|ReadableStream}
+* Returns: {boolean}
+
+Returns whether the stream is readable.
+
 ### `stream.Readable.from(iterable[, options])`
 
 <!-- YAML
@@ -3079,9 +3141,13 @@ Readable.from([
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `readableStream` {ReadableStream}
 * `options` {Object}
@@ -3095,52 +3161,34 @@ added: v17.0.0
 
 <!-- YAML
 added: v16.8.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `stream` {stream.Readable|ReadableStream}
 * Returns: `boolean`
 
 Returns whether the stream has been read from or cancelled.
 
-### `stream.isErrored(stream)`
-
-<!-- YAML
-added:
-  - v17.3.0
-  - v16.14.0
--->
-
-> Stability: 1 - Experimental
-
-* `stream` {Readable|Writable|Duplex|WritableStream|ReadableStream}
-* Returns: {boolean}
-
-Returns whether the stream has encountered an error.
-
-### `stream.isReadable(stream)`
-
-<!-- YAML
-added:
-  - v17.4.0
-  - v16.14.0
--->
-
-> Stability: 1 - Experimental
-
-* `stream` {Readable|Duplex|ReadableStream}
-* Returns: {boolean}
-
-Returns whether the stream is readable.
-
 ### `stream.Readable.toWeb(streamReadable[, options])`
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
+  - version:
+    - v18.7.0
+    pr-url: https://github.com/nodejs/node/pull/43515
+    description: include strategy options on Readable.
 -->
-
-> Stability: 1 - Experimental
 
 * `streamReadable` {stream.Readable}
 * `options` {Object}
@@ -3159,9 +3207,13 @@ added: v17.0.0
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `writableStream` {WritableStream}
 * `options` {Object}
@@ -3175,9 +3227,13 @@ added: v17.0.0
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `streamWritable` {stream.Writable}
 * Returns: {WritableStream}
@@ -3237,9 +3293,13 @@ Duplex.from([
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `pair` {Object}
   * `readable` {ReadableStream}
@@ -3318,9 +3378,13 @@ duplex.once('readable', () => console.log('readable', duplex.read()));
 
 <!-- YAML
 added: v17.0.0
+changes:
+  - version:
+      - v24.0.0
+      - v22.17.0
+    pr-url: https://github.com/nodejs/node/pull/57513
+    description: Marking the API stable.
 -->
-
-> Stability: 1 - Experimental
 
 * `streamDuplex` {stream.Duplex}
 * Returns: {Object}
@@ -3846,8 +3910,6 @@ added: v8.0.0
 
 The `_destroy()` method is called by [`writable.destroy()`][writable-destroy].
 It can be overridden by child classes but it **must not** be called directly.
-Furthermore, the `callback` should not be mixed with async/await
-once it is executed when a promise is resolved.
 
 #### `writable._final(callback)`
 
@@ -3926,7 +3988,7 @@ const { StringDecoder } = require('node:string_decoder');
 class StringWritable extends Writable {
   constructor(options) {
     super(options);
-    this._decoder = new StringDecoder(options && options.defaultEncoding);
+    this._decoder = new StringDecoder(options?.defaultEncoding);
     this.data = '';
   }
   _write(chunk, encoding, callback) {

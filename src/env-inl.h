@@ -44,16 +44,6 @@
 
 namespace node {
 
-NoArrayBufferZeroFillScope::NoArrayBufferZeroFillScope(
-    IsolateData* isolate_data)
-    : node_allocator_(isolate_data->node_allocator()) {
-  if (node_allocator_ != nullptr) node_allocator_->zero_fill_field()[0] = 0;
-}
-
-NoArrayBufferZeroFillScope::~NoArrayBufferZeroFillScope() {
-  if (node_allocator_ != nullptr) node_allocator_->zero_fill_field()[0] = 1;
-}
-
 inline v8::Isolate* IsolateData::isolate() const {
   return isolate_;
 }
@@ -215,6 +205,15 @@ inline v8::Isolate* Environment::isolate() const {
   return isolate_;
 }
 
+inline cppgc::AllocationHandle& Environment::cppgc_allocation_handle() const {
+  return isolate_->GetCppHeap()->GetAllocationHandle();
+}
+
+inline v8::ExternalMemoryAccounter* Environment::external_memory_accounter()
+    const {
+  return external_memory_accounter_;
+}
+
 inline Environment* Environment::from_timer_handle(uv_timer_t* handle) {
   return ContainerOf(&Environment::timer_handle_, handle);
 }
@@ -349,6 +348,11 @@ inline ExitCode Environment::exit_code(const ExitCode default_code) const {
   return exit_info_[kHasExitCode] == 0
              ? default_code
              : static_cast<ExitCode>(exit_info_[kExitCode]);
+}
+
+inline void Environment::set_exit_code(const ExitCode code) {
+  exit_info_[kExitCode] = static_cast<int>(code);
+  exit_info_[kHasExitCode] = 1;
 }
 
 inline AliasedInt32Array& Environment::exit_info() {
@@ -666,7 +670,8 @@ inline bool Environment::no_global_search_paths() const {
 }
 
 inline bool Environment::should_start_debug_signal_handler() const {
-  return (flags_ & EnvironmentFlags::kNoStartDebugSignalHandler) == 0;
+  return ((flags_ & EnvironmentFlags::kNoStartDebugSignalHandler) == 0) &&
+         !options_->disable_sigusr1;
 }
 
 inline bool Environment::no_browser_globals() const {
@@ -676,14 +681,6 @@ inline bool Environment::no_browser_globals() const {
 #else
   return flags_ & EnvironmentFlags::kNoBrowserGlobals;
 #endif
-}
-
-bool Environment::filehandle_close_warning() const {
-  return emit_filehandle_warning_;
-}
-
-void Environment::set_filehandle_close_warning(bool on) {
-  emit_filehandle_warning_ = on;
 }
 
 void Environment::set_source_maps_enabled(bool on) {
@@ -696,6 +693,10 @@ bool Environment::source_maps_enabled() const {
 
 inline uint64_t Environment::thread_id() const {
   return thread_id_;
+}
+
+inline std::string_view Environment::thread_name() const {
+  return thread_name_;
 }
 
 inline worker::Worker* Environment::worker_context() const {
@@ -772,6 +773,13 @@ inline void Environment::ThrowError(
     const char* errmsg) {
   v8::HandleScope handle_scope(isolate());
   isolate()->ThrowException(fun(OneByteString(isolate(), errmsg), {}));
+}
+
+inline void Environment::ThrowStdErrException(std::error_code error_code,
+                                              const char* syscall,
+                                              const char* path) {
+  ThrowErrnoException(
+      error_code.value(), syscall, error_code.message().c_str(), path);
 }
 
 inline void Environment::ThrowErrnoException(int errorno,
@@ -908,26 +916,6 @@ inline void Environment::RemoveHeapSnapshotNearHeapLimitCallback(
                                         heap_limit);
 }
 
-inline void Environment::SetAsyncResourceContextFrame(
-    std::uintptr_t async_resource_handle,
-    v8::Global<v8::Value>&& context_frame) {
-  async_resource_context_frames_.emplace(
-      std::make_pair(async_resource_handle, std::move(context_frame)));
-}
-
-inline const v8::Global<v8::Value>& Environment::GetAsyncResourceContextFrame(
-    std::uintptr_t async_resource_handle) {
-  auto&& async_resource_context_frame =
-      async_resource_context_frames_.find(async_resource_handle);
-  CHECK_NE(async_resource_context_frame, async_resource_context_frames_.end());
-
-  return async_resource_context_frame->second;
-}
-
-inline void Environment::RemoveAsyncResourceContextFrame(
-    std::uintptr_t async_resource_handle) {
-  async_resource_context_frames_.erase(async_resource_handle);
-}
 }  // namespace node
 
 // These two files depend on each other. Including base_object-inl.h after this

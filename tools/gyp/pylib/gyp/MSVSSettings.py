@@ -171,7 +171,7 @@ class _Integer(_Type):
         int(value, self._msbuild_base)
 
     def ConvertToMSBuild(self, value):
-        msbuild_format = (self._msbuild_base == 10) and "%d" or "0x%04x"
+        msbuild_format = ((self._msbuild_base == 10) and "%d") or "0x%04x"
         return msbuild_format % int(value)
 
 
@@ -396,8 +396,7 @@ def _ValidateExclusionSetting(setting, settings, error_msg, stderr=sys.stderr):
     # This may be unrecognized because it's an exclusion list. If the
     # setting name has the _excluded suffix, then check the root name.
     unrecognized = True
-    m = re.match(_EXCLUDED_SUFFIX_RE, setting)
-    if m:
+    if m := re.match(_EXCLUDED_SUFFIX_RE, setting):
         root_setting = m.group(1)
         unrecognized = root_setting not in settings
 

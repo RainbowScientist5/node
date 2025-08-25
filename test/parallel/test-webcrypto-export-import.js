@@ -1,12 +1,14 @@
 'use strict';
 
 const common = require('../common');
+const fixtures = require('../common/fixtures');
 
 if (!common.hasCrypto)
   common.skip('missing crypto');
 
 const assert = require('assert');
 const { subtle } = globalThis.crypto;
+const { createPrivateKey, createPublicKey, createSecretKey } = require('crypto');
 
 {
   async function test() {
@@ -39,6 +41,15 @@ const { subtle } = globalThis.crypto;
     await assert.rejects(
       subtle.importKey('raw', keyData, {
         name: 'HMAC',
+        hash: 'SHA-256',
+        length: 384,
+      }, false, ['sign', 'verify']), {
+        name: 'DataError',
+        message: 'Invalid key length'
+      });
+    await assert.rejects(
+      subtle.importKey('raw', keyData, {
+        name: 'HMAC',
         hash: 'SHA-256'
       }, false, ['deriveBits']), {
         name: 'SyntaxError',
@@ -59,8 +70,8 @@ const { subtle } = globalThis.crypto;
         hash: 'SHA-256',
         length: 1
       }, false, ['sign', 'verify']), {
-        name: 'DataError',
-        message: 'Invalid key length'
+        name: 'NotSupportedError',
+        message: 'Unsupported algorithm.length'
       });
     await assert.rejects(
       subtle.importKey('jwk', null, {
@@ -85,6 +96,10 @@ const { subtle } = globalThis.crypto;
         name: 'HMAC',
         hash: 'SHA-256'
       }, true, ['sign', 'verify']);
+
+
+    assert.strictEqual(key.algorithm, key.algorithm);
+    assert.strictEqual(key.usages, key.usages);
 
     const raw = await subtle.exportKey('raw', key);
 
@@ -127,6 +142,8 @@ const { subtle } = globalThis.crypto;
         name: 'AES-CTR',
         length: 256,
       }, true, ['encrypt', 'decrypt']);
+    assert.strictEqual(key.algorithm, key.algorithm);
+    assert.strictEqual(key.usages, key.usages);
 
     const raw = await subtle.exportKey('raw', key);
 
@@ -275,4 +292,42 @@ const { subtle } = globalThis.crypto;
   }
 
   test().then(common.mustCall());
+}
+
+// SHA-3 hashes and JWK "alg"
+if (!process.features.openssl_is_boringssl) {
+  const rsa = fixtures.readKey('rsa_private_2048.pem');
+  const privateKey = createPrivateKey(rsa);
+  const publicKey = createPublicKey(privateKey);
+
+  async function test(keyObject, algorithm, usages) {
+    const key = keyObject.toCryptoKey(algorithm, true, usages);
+    const jwk = await subtle.exportKey('jwk', key);
+    assert.strictEqual(jwk.alg, undefined);
+  }
+
+  for (const hash of ['SHA3-256', 'SHA3-384', 'SHA3-512']) {
+    for (const name of ['RSA-OAEP', 'RSA-PSS', 'RSASSA-PKCS1-v1_5']) {
+      test(publicKey, { name, hash }, []).then(common.mustCall());
+      test(privateKey, { name, hash }, [name === 'RSA-OAEP' ? 'unwrapKey' : 'sign']).then(common.mustCall());
+    }
+
+    test(createSecretKey(Buffer.alloc(32)), { name: 'HMAC', hash }, ['sign']);
+  }
+
+  {
+    const jwk = createSecretKey(Buffer.alloc(16)).export({ format: 'jwk' });
+    // This is rejected for SHA-2 but ignored for SHA-3
+    // Otherwise, if the name attribute of hash is defined in another applicable specification:
+    // Perform any key import steps defined by other applicable specifications, passing format,
+    // jwk and hash and obtaining hash.
+    jwk.alg = 'HS3-256';
+
+    assert.rejects(subtle.importKey('jwk', jwk, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']), {
+      name: 'DataError',
+      message: 'JWK "alg" does not match the requested algorithm',
+    }).then(common.mustCall());
+
+    subtle.importKey('jwk', jwk, { name: 'HMAC', hash: 'SHA3-256' }, false, ['sign', 'verify']).then(common.mustCall());
+  }
 }

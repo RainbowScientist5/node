@@ -9,13 +9,14 @@ other build systems, such as make and ninja.
 
 
 import copy
-import gyp.common
 import os
 import os.path
 import re
 import shlex
 import subprocess
 import sys
+
+import gyp.common
 from gyp.common import GypError
 
 # Populated lazily by XcodeVersion, for efficiency, and to fix an issue when
@@ -471,17 +472,14 @@ class XcodeSettings:
         """Returns the name of the non-bundle binary represented by this target.
     E.g. hello_world. Only valid for non-bundles."""
         assert not self._IsBundle()
-        assert self.spec["type"] in (
+        assert self.spec["type"] in {
             "executable",
             "shared_library",
             "static_library",
             "loadable_module",
-        ), ("Unexpected type %s" % self.spec["type"])
+        }, ("Unexpected type %s" % self.spec["type"])
         target = self.spec["target_name"]
-        if self.spec["type"] == "static_library":
-            if target[:3] == "lib":
-                target = target[3:]
-        elif self.spec["type"] in ("loadable_module", "shared_library"):
+        if self.spec["type"] in {"loadable_module", "shared_library", "static_library"}:
             if target[:3] == "lib":
                 target = target[3:]
 
@@ -1127,8 +1125,8 @@ class XcodeSettings:
     be deployed to a device.  This should be run as the very last step of the
     build."""
         if not (
-            self.isIOS
-            and (self.spec["type"] == "executable" or self._IsXCTest())
+            (self.isIOS
+            and (self.spec["type"] == "executable" or self._IsXCTest()))
             or self.IsIosFramework()
         ):
             return []
@@ -1352,8 +1350,7 @@ class XcodeSettings:
         if xcode_version < "0500":
             return ""
         default_sdk_path = self._XcodeSdkPath("")
-        default_sdk_root = XcodeSettings._sdk_root_cache.get(default_sdk_path)
-        if default_sdk_root:
+        if default_sdk_root := XcodeSettings._sdk_root_cache.get(default_sdk_path):
             return default_sdk_root
         try:
             all_sdks = GetStdout(["xcodebuild", "-showsdks"])
@@ -1789,11 +1786,9 @@ def _GetXcodeEnv(
         env["INFOPLIST_PATH"] = xcode_settings.GetBundlePlistPath()
         env["WRAPPER_NAME"] = xcode_settings.GetWrapperName()
 
-    install_name = xcode_settings.GetInstallName()
-    if install_name:
+    if install_name := xcode_settings.GetInstallName():
         env["LD_DYLIB_INSTALL_NAME"] = install_name
-    install_name_base = xcode_settings.GetInstallNameBase()
-    if install_name_base:
+    if install_name_base := xcode_settings.GetInstallNameBase():
         env["DYLIB_INSTALL_NAME_BASE"] = install_name_base
     xcode_version, _ = XcodeVersion()
     if xcode_version >= "0500" and not env.get("SDKROOT"):

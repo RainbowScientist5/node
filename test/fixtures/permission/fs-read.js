@@ -14,6 +14,16 @@ const blockedFolder = process.env.BLOCKEDFOLDER;
 const allowedFolder = process.env.ALLOWEDFOLDER;
 const regularFile = __filename;
 
+// Guarantee the error message suggest the --allow-fs-read
+{
+  fs.readFile(blockedFile, common.expectsError({
+    message: 'Access to this API has been restricted. Use --allow-fs-read to manage permissions.',
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: path.toNamespacedPath(blockedFile),
+  }));
+}
+
 // fs.readFile
 {
   fs.readFile(blockedFile, common.expectsError({
@@ -285,6 +295,11 @@ const regularFile = __filename;
   assert.throws(() => {
     fs.readdirSync(blockedFolder, { recursive: true });
   }, common.expectsError({
+    code: 'ERR_ACCESS_DENIED',
+    permission: 'FileSystemRead',
+    resource: path.toNamespacedPath(blockedFolder),
+  }));
+  fs.readdir(blockedFolder, { recursive: true }, common.expectsError({
     code: 'ERR_ACCESS_DENIED',
     permission: 'FileSystemRead',
     resource: path.toNamespacedPath(blockedFolder),
